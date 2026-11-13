@@ -346,6 +346,14 @@ UP.commands = {
         for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
       end
     end
+    if UP.PetPanel and UP.PetPanel.DebugDump then
+      local ok, lines = pcall(UP.PetPanel.DebugDump, UP.PetPanel)
+      if ok and type(lines) == "table" then
+        for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
+      elseif not ok then
+        UP:Print("  pet panel debug failed: " .. tostring(lines))
+      end
+    end
     -- Raw trainer costs for a few ranks, to find which GetTrainerServiceCost return is TP.
     local shown = 0
     for skill, ranks in pairs(UP.char and UP.char.craftCosts or {}) do

@@ -41,10 +41,18 @@ local function openPetView()
   end
 end
 
+-- Menu callbacks run inside the game's menu code, which can hide errors; print them instead.
+local function safe(func)
+  return function()
+    local ok, err = pcall(func)
+    if not ok then UP:Print("Menu error: " .. tostring(err)) end
+  end
+end
+
 -- Entries of the right-click menu, in order.
 Minimap.MENU = {
-  { text = "Skill planner", func = openPlanner },
-  { text = "Pet view", func = openPetView },
+  { text = "Skill planner", func = safe(openPlanner) },
+  { text = "Pet view", func = safe(openPetView) },
 }
 
 -- Older clients without MenuUtil: a UIDropDownMenu at the cursor.

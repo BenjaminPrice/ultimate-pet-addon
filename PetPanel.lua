@@ -554,13 +554,49 @@ end
 -- /upet pet: refresh while the pet view is open, else toggle the floating window.
 function PetPanel:Toggle()
   self:Hook()
+  local action
   if petViewOpen() then
+    action = "attached"
     self:ShowAttached()
   elseif self:IsShown() and self.mode == "floating" then
+    action = "hid"
     self:Hide()
   else
+    action = "floating"
     self:ShowFloating()
   end
+  self.lastToggle = action
+  return action
+end
+
+-- Lines for /upet debug: where the panel is and whether the game draws it.
+function PetPanel:DebugDump()
+  local f = self.frame
+  local lines = { ("pet panel: last toggle %s, mode %s"):format(tostring(self.lastToggle), tostring(self.mode)) }
+  if not f then
+    lines[#lines + 1] = "  not built yet"
+    return lines
+  end
+  local function call(name, ...)
+    if type(f[name]) ~= "function" then return "n/a" end
+    local ok, a, b = pcall(f[name], f, ...)
+    if not ok then return "error" end
+    if b ~= nil then return tostring(a) .. " x " .. tostring(b) end
+    return tostring(a)
+  end
+  local point, rel, relPoint, x, y = f:GetPoint(1)
+  local relName = rel and type(rel.GetName) == "function" and rel:GetName() or tostring(rel)
+  lines[#lines + 1] = ("  shown %s, visible %s, alpha %s, strata %s, level %s"):format(call("IsShown"),
+    call("IsVisible"), call("GetEffectiveAlpha"), call("GetFrameStrata"), call("GetFrameLevel"))
+  lines[#lines + 1] = ("  point %s %s %s %s %s, left %s, top %s, size %s"):format(tostring(point),
+    tostring(relName), tostring(relPoint), tostring(x), tostring(y), call("GetLeft"), call("GetTop"),
+    call("GetSize"))
+  local pos = UP.db and UP.db.global and UP.db.global.petPanel
+  if type(pos) == "table" and pos.point then
+    lines[#lines + 1] = ("  saved %s %s %s %s"):format(tostring(pos.point), tostring(pos.relativePoint),
+      tostring(pos.x), tostring(pos.y))
+  end
+  return lines
 end
 
 -- The button: open the planner, tracking the summoned pet when there is one.
