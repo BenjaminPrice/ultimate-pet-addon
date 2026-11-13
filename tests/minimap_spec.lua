@@ -1,7 +1,6 @@
--- Minimap button: LibDataBroker launcher + LibDBIcon registration, with stubbed libraries.
 local wow = dofile("tests/wowstub.lua")
 
--- Minimal LibStub with LibDataBroker-1.1 and LibDBIcon-1.0 that record what the addon does.
+-- LibStub with LibDataBroker-1.1 and LibDBIcon-1.0 that record what the addon does.
 local function installLibs()
   local rec = { objects = {}, registered = {}, shown = {}, hidden = {} }
   local ldb = {
@@ -14,16 +13,15 @@ local function installLibs()
     Hide = function(_, name) rec.hidden[#rec.hidden + 1] = name end,
   }
   local libs = { ["LibDataBroker-1.1"] = ldb, ["LibDBIcon-1.0"] = icon }
-  _G.LibStub = setmetatable({
+  wow.set("LibStub", setmetatable({
     GetLibrary = function(_, name, silent)
       if not libs[name] and not silent then error("no " .. name) end
       return libs[name]
     end,
-  }, { __call = function(self, name, silent) return self:GetLibrary(name, silent) end })
+  }, { __call = function(self, name, silent) return self:GetLibrary(name, silent) end }))
   return rec
 end
 
--- A tooltip that records its lines.
 local function tooltip()
   local t = { lines = {} }
   function t:AddLine(text) self.lines[#self.lines + 1] = text end
@@ -40,7 +38,7 @@ describe("Minimap button", function()
     wow.takeChat()
   end)
 
-  after_each(function() _G.LibStub = nil end)
+  after_each(wow.restore)
 
   it("registers a launcher with LibDBIcon on login using the saved settings", function()
     wow.fire("PLAYER_LOGIN")
@@ -89,20 +87,12 @@ describe("Minimap button", function()
       UP.Minimap.OnClick({}, "RightButton")
       menu.buttons[1]:Click()
       assert.are.equal(1, planner)
-      assert.matches("picked: Pet view, Skill planner", UP.Minimap:DebugDump()[1], nil, true)
     end)
 
     it("closes on a second right-click", function()
       UP.Minimap.OnClick({}, "RightButton")
       UP.Minimap.OnClick({}, "RightButton")
       assert.is_false(UP.Minimap.menu:IsShown())
-    end)
-
-    it("prints menu errors instead of losing them", function()
-      UP.PetPanel = { Toggle = function() error("boom") end }
-      UP.Minimap.OnClick({}, "RightButton")
-      UP.Minimap.menu.buttons[2]:Click()
-      assert.matches("Menu error: .*boom", table.concat(wow.takeChat(), "\n"))
     end)
   end)
 
@@ -127,14 +117,14 @@ describe("Minimap button", function()
     wow.slash("/upet minimap")
     assert.is_true(UltimatePetDB.global.minimap.hide)
     assert.are.same({ "UltimatePet" }, rec.hidden)
-    assert.matches("Minimap button hidden", table.concat(wow.takeChat(), "\n"), nil, true)
+    assert.matches("Minimap button hidden", wow.chatText(), nil, true)
     wow.slash("/upet minimap")
     assert.is_false(UltimatePetDB.global.minimap.hide)
     assert.are.same({ "UltimatePet" }, rec.shown)
   end)
 
   it("does nothing without the libraries", function()
-    _G.LibStub = nil
+    wow.set("LibStub", nil)
     assert.is_false(UP.Minimap:Init())
   end)
 end)

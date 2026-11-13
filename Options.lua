@@ -1,22 +1,11 @@
 -- UltimatePet: Options.lua
--- The options page under Options -> AddOns -> UltimatePet: learned-ability alert settings, the
--- minimap button, and shortcuts to a test alert and the planner.
---
--- Public API
---   Options:Build()     creates the page (once) and returns it
---   Options:Register()  adds the page to the game's options (Settings, else InterfaceOptions)
---   Options:Refresh()   sets the checkboxes from the saved settings
---   Options:Open()      opens the game's options at this page
+-- The page under Options -> AddOns -> UltimatePet.
 local _, UP = ...
 
 local Options = UP.Options or {}
 UP.Options = Options
 
 local NAME = "UltimatePet"
-
-local function global(name)
-  return rawget(_G, name)
-end
 
 local function create(kind, name, parent, template)
   if template then
@@ -89,7 +78,6 @@ local function setMinimap(show)
   end
 end
 
--- The page's controls, in order: { key, label } for alert checkboxes.
 local ALERT_BOXES = {
   { "popup", "Show a popup on screen" },
   { "sound", "Play a sound" },
@@ -177,7 +165,7 @@ function Options:Register()
   if self.registered then return true end
   local ok, f = pcall(self.Build, self)
   if not ok or not f then return false end
-  local settings = global("Settings")
+  local settings = UP.lookup("Settings")
   if type(settings) == "table" and type(settings.RegisterCanvasLayoutCategory) == "function" then
     local okCat, category = pcall(settings.RegisterCanvasLayoutCategory, f, NAME)
     if okCat and category then
@@ -189,7 +177,7 @@ function Options:Register()
       return true
     end
   end
-  local add = global("InterfaceOptions_AddCategory")
+  local add = UP.lookup("InterfaceOptions_AddCategory")
   if type(add) == "function" and pcall(add, f) then
     self.registered = true
     return true
@@ -199,7 +187,7 @@ end
 
 function Options:Open()
   self:Register()
-  local settings = global("Settings")
+  local settings = UP.lookup("Settings")
   if self.category and type(settings) == "table" and type(settings.OpenToCategory) == "function" then
     local category = self.category
     local id = category
@@ -209,7 +197,7 @@ function Options:Open()
     end
     if id ~= nil and pcall(settings.OpenToCategory, id) then return true end
   end
-  local open = global("InterfaceOptionsFrame_OpenToCategory")
+  local open = UP.lookup("InterfaceOptionsFrame_OpenToCategory")
   if self.frame and type(open) == "function" then
     -- Called twice: the first call can land on the wrong page when the list hasn't been built yet.
     pcall(open, self.frame)

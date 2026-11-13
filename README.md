@@ -16,7 +16,7 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
 1. Open your Beast Training window once (the spellbook icon). UltimatePet reads which ranks you
    know. Do it again after learning new ranks.
 2. Type `/upet` or click the minimap button to open the planner. Right-click the minimap button
-   for a menu with the planner and the pet view.
+   for a menu with **Skill planner** and **Pet view**.
 3. Pick a family and a preset, or tick **Use current pet** to plan for the pet you have out.
 4. Each chosen rank shows its status: Trained, Ready to Train, Unlocked (with what's missing),
    Not Unlocked, Trainer (bought from a pet trainer) or No known source.
@@ -57,7 +57,7 @@ collectors such as EllesmereUI's minimap module and broker bars such as Titan Pa
 | `alerts` | Show alert settings; `alerts popup|sound|chat on|off` changes them, `alerts test` shows a sample |
 | `options` | Open the options page (also under Options, AddOns) |
 | `minimap` | Show or hide the minimap button |
-| `debug` | Print the client build, which game APIs exist, the pet and scanner state (paste it into bug reports) |
+| `debug` | Print the addon version, client build and the scanner's pet and trainer state (paste it into bug reports) |
 | `export` | Print the current build as a shareable string |
 | `import <string>` | Load a build string |
 | `reset confirm` | Wipe this character's saved data (`reset` alone only explains) |
@@ -82,7 +82,8 @@ With luarocks: `luarocks install --local luacheck` and `luarocks install --local
 On Nix, run them without installing anything:
 
 ```sh
-nix shell nixpkgs#lua51Packages.busted nixpkgs#lua51Packages.luacheck -c sh -c 'luacheck . && busted'
+nix shell nixpkgs#lua51Packages.busted nixpkgs#lua51Packages.luacheck nixpkgs#lua5_1 \
+  -c sh -c 'luacheck . && busted && lua tests/smoke.lua'
 ```
 
 `tests/wowstub.lua` is a minimal fake of the WoW API. It reads `UltimatePet.toc` and runs each
@@ -96,12 +97,12 @@ To regenerate (Python 3, standard library only):
 python3 -I tools/gen_data.py --petopia <abilities-YYYY-MM-DD.html> --wowhead <dir>
 ```
 
+It rewrites the three files and `tools/DATA_NOTES.md`, which lists every source conflict, unknown
+TP cost and beast without coordinates.
+
 TrueshotLodge's data files are vendored in `tools/sources/trueshotlodge/` (MIT, upstream commit in
 `COMMIT`); pass `--tl <checkout>` to use a newer copy. The Petopia and Wowhead page snapshots are
 kept locally, not in the repo.
-
-It rewrites the three files and `tools/DATA_NOTES.md`, which lists every source conflict, unknown
-TP cost and beast without coordinates.
 
 To build a zip for sharing, run `python3 -I tools/package.py`. It writes
 `.release/UltimatePet-<version>.zip` with only the files the game loads, inside an `UltimatePet/`

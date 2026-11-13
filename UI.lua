@@ -1,16 +1,5 @@
 -- UltimatePet: UI.lua
 -- The planner window (layout: .ai/ui-mock-approved.html). Created on first Show, refreshed on STATE_CHANGED.
---
--- Public API
---   UI:Toggle(), UI:Show(), UI:Hide(), UI:Refresh()
---   UI.RowModel(skill, rank, ctx)      what one skill row shows (label, colours, tp text, clickable)
---   UI.TooltipLines(skill, rank, ctx)  the row tooltip as a list of lines
---   UI.PopoverModel(skill, rank)       the beast list for a locked rank
---   UI.StatusColor(code), UI.SkillIcon(skill, rank)   shared with the pet panel
---   UI.State()                         the build plus the derived level, budget, costs and Planner ctx
--- The action methods (SaveBuild, Import, StepRank, ...) are what the buttons call; the specs call them too.
---
--- Only the frame name "UltimatePetFrame" (plus template children named after it) becomes a global.
 -- luacheck: read globals UIParent GameTooltip UISpecialFrames C_Spell
 -- luacheck: read globals UIDropDownMenu_Initialize UIDropDownMenu_CreateInfo UIDropDownMenu_AddButton
 -- luacheck: read globals UIDropDownMenu_SetText UIDropDownMenu_SetWidth UIDropDownMenu_EnableDropDown
@@ -50,7 +39,6 @@ local COLORS = {
 }
 UI.COLORS = COLORS
 
--- Planner.Status code -> colour key.
 local CODE_COLOR = {
   TRAINED = "TRAINED", READY = "READY", NEED_LEVEL = "NEED", NEED_TP = "NEED", TRAINER_LEVEL = "NEED",
   LOCKED = "LOCKED", TRAINER = "TRAINER", NO_SOURCE = "NO_SOURCE",
@@ -60,19 +48,6 @@ local HOW_TO_LEARN = "How to learn: tame the beast and use the ability at least 
   .. "You must be at least the beast's level to tame it."
 local BANNER_TEXT = "Beast Training not synced. Open your Beast Training window once so UltimatePet "
   .. "can see which ranks you know."
-
--- ---------------------------------------------------------------------------
--- Small helpers
--- ---------------------------------------------------------------------------
-
-local function lookup(path)
-  local value = _G
-  for part in path:gmatch("[^%.]+") do
-    if type(value) ~= "table" then return nil end
-    value = value[part]
-  end
-  return value
-end
 
 local function hex(c)
   local function byte(v) return math.floor(v * 255 + 0.5) end
@@ -92,10 +67,7 @@ local function printError(msg)
 end
 
 local function spellTexture(spellId)
-  local fn = lookup("C_Spell.GetSpellTexture")
-  if type(fn) ~= "function" or not spellId then return nil end
-  local ok, tex = pcall(fn, spellId)
-  return ok and tex or nil
+  return spellId and UP.call("C_Spell.GetSpellTexture", spellId) or nil
 end
 
 local function countSkills(build)
@@ -129,7 +101,7 @@ local function petName(p)
   return p.name or "Your pet"
 end
 
--- The key builds are assigned under in UP.char.petBuild.
+-- The key a pet's assigned build is stored under in UP.char.petBuild.
 local function petKey(p)
   if p.key ~= nil then return p.key end
   return tostring(p.name) .. "|" .. tostring(p.family)
@@ -163,25 +135,24 @@ local function currentBuild()
   return build
 end
 
--- Stores build as the current build and fires STATE_CHANGED (which refreshes the window).
+-- SetCurrentBuild fires STATE_CHANGED, which refreshes the window.
 local function commit(build)
   UP:SetCurrentBuild(build or currentBuild())
+end
+
+local function savedBuild(name)
+  local build = UP.Planner.CopyBuild(UP.char.builds[name])
+  build.loaded, build.mine = name, true
+  return build
 end
 
 -- A saved build (or else a preset) of `family` by name, as a fresh current build.
 local function resolveBuild(name, family)
   local saved = UP.char.builds[name]
-  if type(saved) == "table" and saved.family == family then
-    local build = UP.Planner.CopyBuild(saved)
-    build.loaded, build.mine = name, true
-    return build
-  end
-  local preset = UP.Planner.Preset(family, name)
-  if preset then return presetBuild(family, name) end
-  return nil
+  if type(saved) == "table" and saved.family == family then return savedBuild(name) end
+  if UP.Planner.Preset(family, name) then return presetBuild(family, name) end
 end
 
--- Opens or closes the current pet panel.
 function UI:OpenPetView()
   if UP.PetPanel and UP.PetPanel.Toggle then
     UP.PetPanel:Toggle()
@@ -256,7 +227,6 @@ end
 -- View models (pure; tested without frames)
 -- ---------------------------------------------------------------------------
 
--- Row label for a Planner.Status result.
 function UI.StatusLabel(st)
   local code = st.code
   if code == "TRAINED" then return "Trained" end
@@ -282,12 +252,10 @@ function UI.SkillLists(family)
   return actives, passives
 end
 
--- The colour for a Planner.Status code (grey for an unknown code).
 function UI.StatusColor(code)
   return COLORS[CODE_COLOR[code or ""]] or COLORS.GREY
 end
 
--- The game icon for a rank of a skill, else the bundled icon path.
 function UI.SkillIcon(skill, rank)
   local def = UP.Skills[skill]
   if not def then return nil end
@@ -361,14 +329,9 @@ function UI.TooltipLines(skill, rank, ctx)
 end
 
 local function zoneName(info)
-  if info.map then
-    local fn = lookup("C_Map.GetMapInfo")
-    if type(fn) == "function" then
-      local ok, mapInfo = pcall(fn, info.map)
-      if ok and type(mapInfo) == "table" and type(mapInfo.name) == "string" and mapInfo.name ~= "" then
-        return mapInfo.name
-      end
-    end
+  local mapInfo = info.map and UP.call("C_Map.GetMapInfo", info.map)
+  if type(mapInfo) == "table" and type(mapInfo.name) == "string" and mapInfo.name ~= "" then
+    return mapInfo.name
   end
   return info.zone or "Unknown zone"
 end
@@ -395,7 +358,6 @@ function UI.BeastEntry(info)
   return { id = info.id, name = info.name or ("npc " .. tostring(info.id)), detail = detail, note = note }
 end
 
--- The popover for a locked (or no-source) rank.
 function UI.PopoverModel(skill, rank)
   local r = UP.Skills[skill].ranks[rank]
   local all = (UP.Beasts.teach[skill] or {})[rank] or {}
@@ -472,11 +434,8 @@ function UI:LoadPreset(name)
 end
 
 function UI:LoadMyBuild(name)
-  local saved = UP.char.builds[name]
-  if type(saved) ~= "table" then return end
-  local build = UP.Planner.CopyBuild(saved)
-  build.loaded, build.mine = name, true
-  commit(build)
+  if type(UP.char.builds[name]) ~= "table" then return end
+  commit(savedBuild(name))
 end
 
 function UI:StepRank(skill, delta)
@@ -583,7 +542,7 @@ function UI:SetActiveForPet()
   return true
 end
 
--- Returns the build string for the current build at the shown level and loyalty.
+-- Encodes the shown level and loyalty, which are the pet's own when tracking it.
 function UI:ExportString()
   local s = UI.State()
   return UP.Serializer.Encode({
@@ -653,7 +612,7 @@ function UI:Waypoint(npcId)
 end
 
 -- ---------------------------------------------------------------------------
--- Widget builders (each template guarded, with a plain fallback)
+-- Widget builders: each template is guarded, with a plain fallback
 -- ---------------------------------------------------------------------------
 
 -- CreateFrame with the first template that works. Returns the frame and the template used (or nil).
@@ -748,7 +707,6 @@ local function tooltipFor(frame, fn)
   frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
 
--- Edit box with a grey placeholder shown while it is empty and unfocused.
 local function editBox(parent, width, placeholder)
   local e, template = create("EditBox", nil, parent, "InputBoxTemplate", "BackdropTemplate")
   e:SetSize(width, 20)
@@ -764,7 +722,6 @@ local function editBox(parent, width, placeholder)
   local function update()
     hint:SetShown(e:GetText() == "" and not e:HasFocus())
   end
-  e.updatePlaceholder = update
   e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   e:SetScript("OnEditFocusGained", update)
   e:SetScript("OnEditFocusLost", function(self)
@@ -825,10 +782,8 @@ local function slider(parent, min, max, width)
   return s
 end
 
--- ---------------------------------------------------------------------------
--- Dropdowns: UIDropDownMenu when the client has it, else a small menu of our own.
--- Returned as { frame, setText(text), setEnabled(on) }.
--- ---------------------------------------------------------------------------
+-- Dropdowns use UIDropDownMenu when the client has it, else a small menu of our own.
+-- Returned as { frame, own, setText(text), setEnabled(on) }.
 
 local ownMenu
 
@@ -912,7 +867,6 @@ local function dropdown(parent, name, width, itemsFn)
       }
     end
   end
-  -- Fallback: a button showing the selection that opens our own menu.
   local b = button(parent, "", width + 24, 22)
   b:SetScript("OnClick", function(self) showOwnMenu(self, itemsFn()) end)
   return {
@@ -974,7 +928,6 @@ local function buildWindow()
     close:SetScript("OnClick", function() UI:Hide() end)
   end
 
-  -- Drag by the title bar.
   local drag = CreateFrame("Frame", nil, f)
   drag:SetPoint("TOPLEFT", 0, 0)
   drag:SetPoint("TOPRIGHT", -28, 0)
@@ -1115,11 +1068,6 @@ local function scrollArea(col)
   return scroll, child
 end
 
-local function stepButton(row, label)
-  local b = button(row, label, 20, 18)
-  return b
-end
-
 local function createRow(col)
   local row = CreateFrame("Button", nil, col.child)
   row:SetHeight(ROW_HEIGHT)
@@ -1135,12 +1083,12 @@ local function createRow(col)
   row.tp = text(row, "GameFontHighlight", "RIGHT")
   row.tp:SetWidth(30)
   row.tp:SetPoint("RIGHT", -4, 0)
-  row.plus = stepButton(row, "+")
+  row.plus = button(row, "+", 20, 18)
   row.plus:SetPoint("RIGHT", row.tp, "LEFT", -6, 0)
   row.rank = text(row, "GameFontHighlight", "CENTER")
   row.rank:SetWidth(38)
   row.rank:SetPoint("RIGHT", row.plus, "LEFT", -2, 0)
-  row.minus = stepButton(row, "-")
+  row.minus = button(row, "-", 20, 18)
   row.minus:SetPoint("RIGHT", row.rank, "LEFT", -2, 0)
 
   row.name = text(row, "GameFontHighlight", "LEFT")

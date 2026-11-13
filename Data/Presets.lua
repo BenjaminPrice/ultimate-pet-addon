@@ -1,14 +1,12 @@
--- UltimatePet: Data/Presets.lua
--- Suggested level 60 builds per family (Best Friend, 300 TP). Hand-authored, not generated.
--- These are community-style suggestions, not authoritative. tests/presets_spec.lua checks that each
--- one fits 300 known TP, uses at most 4 actives and only skills and ranks the family can learn.
+-- Suggested level 60 Best Friend builds (300 TP) per family. Hand-written, not generated.
+-- tests/presets_spec.lua checks that each fits 300 known TP, uses at most 4 actives and only skills
+-- and ranks the family can learn.
 -- Ranks with no known source are avoided (the highest taught rank is used instead), except Lava
 -- Breath, which has no source at all.
 local _, UP = ...
 
 local UNKNOWN = " Includes abilities with unknown TP cost."
 
--- One preset: level 60, Best Friend.
 local function preset(name, role, skills, note)
   return { name = name, role = role, level = 60, loyalty = 6, skills = skills, note = note }
 end

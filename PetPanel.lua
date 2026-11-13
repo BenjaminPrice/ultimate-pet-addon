@@ -1,17 +1,8 @@
 -- UltimatePet: PetPanel.lua
--- A small panel for the summoned pet: its level, loyalty and TP, the build assigned to it, and the
--- skills it knows (with the build's target ranks). It sits beside the character sheet while the Pet
--- tab or pet view is open, and `/upet pet` also opens it as a floating window.
---
--- Public API
---   PetPanel.Model(pet, build, ctx)   what the panel shows (pure; tested without frames)
---   PetPanel.ActiveBuild(pet)         the build assigned to this pet, with .name, or nil
---   PetPanel:Hook()                   hook the Pet tab (safe to call repeatedly)
---   PetPanel:Toggle()                 /upet pet
---   PetPanel:Refresh(), PetPanel:Hide()
---
+-- Panel for the summoned pet: level, loyalty, TP, assigned build and known skills. It sits beside
+-- the character sheet while the pet view is open; `/upet pet` opens it as a floating window.
 -- Blizzard frames are only hooked (HookScript), never changed.
--- luacheck: read globals UIParent UISpecialFrames GameTooltip InCombatLockdown C_Spell
+-- luacheck: read globals UIParent UISpecialFrames GameTooltip InCombatLockdown
 local _, UP = ...
 
 local PetPanel = UP.PetPanel or {}
@@ -29,8 +20,6 @@ local PET_VIEWS = { "PetPaperDollFrame", "CharacterStatsPanePetScrollBox" }
 -- ends at its visible edge.
 local ATTACH_X, ATTACH_Y = -32, -14
 local MODERN_X, MODERN_Y = 4, 0
--- Offset from PetPaperDollFrame's TOPRIGHT when CharacterFrame doesn't exist.
-local FALLBACK_X, FALLBACK_Y = 0, 0
 local PAD = 10
 local TITLE_HEIGHT = 22
 local LINE_HEIGHT = 15
@@ -40,14 +29,9 @@ local ICON_SIZE = 18
 local BUTTON_HEIGHT = 22
 
 local DOT = "  \194\183  "
--- Beast Training, the hunter spell that opens the training window (Classic spell id).
 local BEAST_TRAINING_ID = 5149
 local BEAST_TRAINING_ICON = "Interface\\Icons\\Ability_Hunter_BeastTraining"
 local TRAIN_SIZE = 14
-
--- ---------------------------------------------------------------------------
--- Model (pure)
--- ---------------------------------------------------------------------------
 
 local function colors()
   return UP.UI.COLORS
@@ -58,8 +42,8 @@ local function hex(c)
   return format("|cff%02x%02x%02x", byte(c[1]), byte(c[2]), byte(c[3]))
 end
 
--- The build assigned to this pet (a saved build of its family, else a preset of that name), as a
--- copy with a `name` field, or nil.
+-- A copy of the build assigned to this pet (a saved build of its family, else a preset of that
+-- name) with a `name` field, or nil.
 function PetPanel.ActiveBuild(pet)
   if not (pet and pet.exists and UP.char) then return nil end
   local key = pet.key
@@ -109,7 +93,6 @@ function PetPanel.Upgrade(skill, known, ctx)
     enough = delta == nil or delta <= (ctx.unspent or 0) }
 end
 
--- One skill row: { skill, name, icon, rankText, color, nameColor, upgrade }.
 local function skillRow(skill, known, target, hasBuild, ctx)
   local C = colors()
   local row = { skill = skill, name = skill, nameColor = known and C.WHITE or C.GREY }
@@ -128,9 +111,7 @@ local function skillRow(skill, known, target, hasBuild, ctx)
   return row
 end
 
--- What the panel shows for `pet` (Scanner.pet) and `build` (ActiveBuild's result or nil).
 -- Returns { hasPet, lines = { { text, color } }, rows = { row or { header } }, canUse, freeColor }.
--- Line text may carry colour codes (the free TP number).
 function PetPanel.Model(pet, build, ctx)
   local C = colors()
   local m = { hasPet = false, lines = {}, rows = {}, canUse = false }
@@ -188,11 +169,7 @@ function PetPanel.Model(pet, build, ctx)
   return m
 end
 
--- ---------------------------------------------------------------------------
--- Frames
--- ---------------------------------------------------------------------------
-
--- CreateFrame with the first template that works (see UI.lua).
+-- CreateFrame with the first template that works.
 local function create(kind, name, parent, ...)
   for i = 1, select("#", ...) do
     local template = select(i, ...)
@@ -231,7 +208,6 @@ local function savePosition(f)
   end
 end
 
--- The saved spot if the panel was dragged, else beside the planner when it's open, else centre.
 local function placeFloating(f)
   local pos = UP.db and UP.db.global and UP.db.global.petPanel
   local planner = UP.UI and UP.UI.frame
@@ -253,7 +229,7 @@ local function placeAttached(f)
   elseif character then
     f:SetPoint("TOPLEFT", character, "TOPRIGHT", ATTACH_X, ATTACH_Y)
   elseif petFrame then
-    f:SetPoint("TOPLEFT", petFrame, "TOPRIGHT", FALLBACK_X, FALLBACK_Y)
+    f:SetPoint("TOPLEFT", petFrame, "TOPRIGHT", 0, 0)
   else
     placeFloating(f)
   end
@@ -333,7 +309,6 @@ local function buildFrame()
   return f
 end
 
--- Tooltip lines for a row's train icon.
 function PetPanel.TrainTooltip(skill, up, inCombat)
   local lines = { { format("%s (Rank %d) can be trained.", skill, up.rank), 1, 1, 1 } }
   if up.delta == nil then
@@ -371,7 +346,7 @@ end
 -- hovered train icon (out of combat only) and hidden again on leave or when combat starts.
 local function trainOverlay()
   if PetPanel.overlay ~= nil then return PetPanel.overlay or nil end
-  local name = UP.lookup("C_Spell.GetSpellName") and C_Spell.GetSpellName(BEAST_TRAINING_ID) or nil
+  local name = UP.call("C_Spell.GetSpellName", BEAST_TRAINING_ID)
   local ok, b = pcall(CreateFrame, "Button", "UltimatePetTrainButton", UIParent, "SecureActionButtonTemplate")
   if not (ok and b) then
     PetPanel.overlay = false
@@ -392,7 +367,7 @@ local function trainOverlay()
   return b
 end
 
--- Puts the secure button over `icon`, using screen coordinates relative to UIParent only.
+-- Positioned in UIParent screen coordinates so the overlay doesn't depend on the panel.
 local function placeOverlay(icon, rm)
   if inCombat() then return end
   local b = trainOverlay()
@@ -422,7 +397,6 @@ local function createRow(f)
   row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
   row.rank = text(row, "GameFontHighlightSmall", "RIGHT")
   row.rank:SetPoint("RIGHT", 0, 0)
-  -- Train icon: shown when a higher unlocked rank can be trained; opens Beast Training.
   row.train = CreateFrame("Button", nil, row)
   row.train:SetSize(TRAIN_SIZE, TRAIN_SIZE)
   row.train:SetPoint("RIGHT", row.rank, "LEFT", -4, 0)
@@ -512,7 +486,6 @@ function PetPanel:Refresh()
   f:SetHeight(-y + 8 + BUTTON_HEIGHT + PAD)
 end
 
--- Shows the panel beside the character sheet.
 function PetPanel:ShowAttached()
   local f = self:Create()
   self.mode = "attached"
@@ -522,11 +495,10 @@ function PetPanel:ShowAttached()
   if f:IsShown() then self:Refresh() else f:Show() end
 end
 
--- Shows the panel as a movable window.
 function PetPanel:ShowFloating()
   local f = self:Create()
   self.mode = "floating"
-  -- Same strata as the planner, raised, so the planner window never covers it.
+  -- Same strata as the planner, raised, so the planner never covers it.
   f:SetFrameStrata("HIGH")
   placeFloating(f)
   f.close:Show()
@@ -543,7 +515,6 @@ function PetPanel:IsShown()
   return self.frame ~= nil and self.frame:IsShown()
 end
 
--- Whether the character sheet is showing the pet (Pet tab or pet view).
 local function petViewOpen()
   for _, name in ipairs(PET_VIEWS) do
     if isVisible(blizzard(name)) then return true end
@@ -551,63 +522,24 @@ local function petViewOpen()
   return false
 end
 
--- /upet pet: refresh while the pet view is open, else toggle the floating window.
 function PetPanel:Toggle()
   self:Hook()
-  local action
   if petViewOpen() then
-    action = "attached"
     self:ShowAttached()
   elseif self:IsShown() and self.mode == "floating" then
-    action = "hid"
     self:Hide()
   else
-    action = "floating"
     self:ShowFloating()
   end
-  self.lastToggle = action
-  return action
 end
 
--- Lines for /upet debug: where the panel is and whether the game draws it.
-function PetPanel:DebugDump()
-  local f = self.frame
-  local lines = { ("pet panel: last toggle %s, mode %s"):format(tostring(self.lastToggle), tostring(self.mode)) }
-  if not f then
-    lines[#lines + 1] = "  not built yet"
-    return lines
-  end
-  local function call(name, ...)
-    if type(f[name]) ~= "function" then return "n/a" end
-    local ok, a, b = pcall(f[name], f, ...)
-    if not ok then return "error" end
-    if b ~= nil then return tostring(a) .. " x " .. tostring(b) end
-    return tostring(a)
-  end
-  local point, rel, relPoint, x, y = f:GetPoint(1)
-  local relName = rel and type(rel.GetName) == "function" and rel:GetName() or tostring(rel)
-  lines[#lines + 1] = ("  shown %s, visible %s, alpha %s, strata %s, level %s"):format(call("IsShown"),
-    call("IsVisible"), call("GetEffectiveAlpha"), call("GetFrameStrata"), call("GetFrameLevel"))
-  lines[#lines + 1] = ("  point %s %s %s %s %s, left %s, top %s, size %s"):format(tostring(point),
-    tostring(relName), tostring(relPoint), tostring(x), tostring(y), call("GetLeft"), call("GetTop"),
-    call("GetSize"))
-  local pos = UP.db and UP.db.global and UP.db.global.petPanel
-  if type(pos) == "table" and pos.point then
-    lines[#lines + 1] = ("  saved %s %s %s %s"):format(tostring(pos.point), tostring(pos.relativePoint),
-      tostring(pos.x), tostring(pos.y))
-  end
-  return lines
-end
-
--- The button: open the planner, tracking the summoned pet when there is one.
 function PetPanel:OpenPlanner()
   local UI = UP.UI
   if UP.char and UI:CanUsePet() and not UI:UsingPet() then UI:SetUseCurrent(true) end
   UI:Show()
 end
 
--- Hooks OnShow/OnHide of every pet view that exists, once each. Returns true when at least one
--- is hooked.
+-- Returns true when at least one pet view is hooked.
 function PetPanel:Hook()
   self.hookedViews = self.hookedViews or {}
   for _, name in ipairs(PET_VIEWS) do
@@ -628,7 +560,6 @@ function PetPanel:Hook()
 end
 
 UP:On("PLAYER_LOGIN", function() PetPanel:Hook() end)
--- In case the character UI loads later.
 UP:On("ADDON_LOADED", function() if UP.char then PetPanel:Hook() end end)
 
 UP:On("STATE_CHANGED", function()

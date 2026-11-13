@@ -1,16 +1,5 @@
 local wow = dofile("tests/wowstub.lua")
 
-local function copy(t)
-  if type(t) ~= "table" then return t end
-  local out = {}
-  for k, v in pairs(t) do out[k] = copy(v) end
-  return out
-end
-
-local function joined(lines)
-  return table.concat(lines, "\n")
-end
-
 describe("TOC", function()
   it("targets WoW: Forever and declares the SavedVariables", function()
     local _, meta = wow.readToc("UltimatePet.toc")
@@ -48,7 +37,7 @@ describe("Core", function()
       assert.is_table(UltimatePetDB.global.frame)
       local char = UltimatePetDB.chars["Tester-Forever"]
       assert.is_table(char)
-      for _, key in ipairs({ "unlocked", "craftCosts", "builds", "petBuild" }) do
+      for _, key in ipairs({ "unlocked", "builds", "petBuild" }) do
         assert.is_table(char[key], key)
       end
       assert.is_nil(char.scannedAt)
@@ -84,7 +73,6 @@ describe("Core", function()
       assert.is_false(UltimatePetDB.global.minimap.hide)
       assert.is_true(UP.char.unlocked.Bite[3])
       assert.are.equal(123, UP.char.scannedAt)
-      assert.is_table(UP.char.craftCosts)
       assert.is_table(UltimatePetDB.chars["Alt-Forever"].builds.x)
     end)
   end)
@@ -106,18 +94,24 @@ describe("Core", function()
       UP:InitDB()
       assert.are.equal(first, UltimatePetDB)
       assert.is_true(UltimatePetDB.chars["Tester-Forever"].unlocked.Claw[2])
-      -- A second session loading the saved table changes nothing.
-      local snapshot = copy(first)
+      local snapshot = wow.copy(first)
       UP = wow.load({ saved = first })
       wow.fire("ADDON_LOADED", "UltimatePet")
       assert.are.same(snapshot, UltimatePetDB)
+    end)
+
+    it("drops the unused craftCosts table when migrating to version 3", function()
+      UP = wow.load({ saved = { version = 2, chars = { ["Tester-Forever"] = { craftCosts = { Bite = {} } } } } })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      assert.is_nil(UP.char.craftCosts)
+      assert.are.equal(3, UltimatePetDB.version)
     end)
 
     it("leaves a newer DB's version alone and warns", function()
       UP = wow.load({ saved = { version = 99 } })
       wow.fire("ADDON_LOADED", "UltimatePet")
       assert.are.equal(99, UltimatePetDB.version)
-      assert.matches("newer version", joined(wow.chat))
+      assert.matches("newer version", wow.chatText())
     end)
   end)
 
@@ -167,27 +161,21 @@ describe("Core", function()
       wow.slash("/upet show")
       assert.are.equal(2, toggled)
       wow.slash("/upet help")
-      assert.matches("reset", joined(wow.takeChat()))
+      assert.matches("reset", wow.chatText())
       wow.slash("/upet frobnicate")
-      assert.matches("unknown command 'frobnicate'", joined(wow.takeChat()))
+      assert.matches("unknown command 'frobnicate'", wow.chatText())
     end)
 
     it("reports no pet for scan", function()
       wow.slash("/upet scan")
-      assert.matches("No pet summoned.", joined(wow.takeChat()), nil, true)
+      assert.matches("No pet summoned.", wow.chatText(), nil, true)
     end)
 
-    it("lists APIs in debug, guarded against missing tables", function()
-      _G.C_Timer = nil
-      _G.GetPetLoyalty = function() end
+    it("prints the version, client and scanner state in debug", function()
       wow.slash("/upet debug")
-      local out = joined(wow.takeChat())
-      assert.matches("GetCraftInfo: missing", out, nil, true)
-      assert.matches("C_Timer.After: missing", out, nil, true)
-      assert.matches("GetPetLoyalty: function", out, nil, true)
-      _G.GetPetLoyalty = nil
-      assert.matches("TomTom.AddWaypoint: missing", out, nil, true)
+      local out = wow.chatText()
       assert.matches("client 1.60.0", out, nil, true)
+      assert.matches("pet: none", out, nil, true)
     end)
 
     it("prefixes output", function()
@@ -211,9 +199,7 @@ describe("Core", function()
     end)
 
     it("defaults to the summoned pet's family", function()
-      UP = wow.load({ petFamily = "Wolf" })
-      wow.fire("ADDON_LOADED", "UltimatePet")
-      wow.takeChat()
+      UP = wow.start({ petFamily = "Wolf" })
       wow.slash("/upet export")
       assert.matches("^UltimatePet: UP1:Wolf:60%-6:", wow.takeChat()[1])
     end)
@@ -241,10 +227,7 @@ describe("Core", function()
 
     it("survives a reload", function()
       wow.slash("/upet import UP1:Wolf:60-6:Bi8")
-      local saved = UltimatePetDB
-      UP = wow.load({ saved = saved })
-      wow.fire("ADDON_LOADED", "UltimatePet")
-      wow.takeChat()
+      UP = wow.start({ saved = UltimatePetDB })
       wow.slash("/upet export")
       assert.are.same({ "UltimatePet: UP1:Wolf:60-6:Bi8" }, wow.takeChat())
     end)
@@ -252,18 +235,16 @@ describe("Core", function()
 
   describe("reset", function()
     before_each(function()
-      UP = wow.load({ saved = { version = 1, chars = {
+      UP = wow.start({ saved = { version = 1, chars = {
         ["Tester-Forever"] = { unlocked = { Bite = { [1] = true } } },
         ["Alt-Forever"] = { unlocked = { Claw = { [1] = true } } },
       } } })
-      wow.fire("ADDON_LOADED", "UltimatePet")
-      wow.takeChat()
     end)
 
     it("requires confirm", function()
       wow.slash("/upet reset")
       assert.is_true(UP.char.unlocked.Bite[1])
-      assert.matches("reset confirm", joined(wow.takeChat()), nil, true)
+      assert.matches("reset confirm", wow.chatText(), nil, true)
     end)
 
     it("wipes only this character with confirm", function()
