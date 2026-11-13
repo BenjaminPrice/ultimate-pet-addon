@@ -25,7 +25,7 @@ describe("TOC", function()
     assert.are.equal("Core.lua", files[2])
     local UP = wow.load()
     for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI", "PetPanel", "Minimap",
-                            "Families", "Skills", "Beasts", "Presets" }) do
+                            "Alerts", "Options", "Families", "Skills", "Beasts", "Presets" }) do
       assert.is_table(UP[name], name)
     end
   end)

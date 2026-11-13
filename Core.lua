@@ -85,6 +85,7 @@ local GLOBAL_DEFAULTS = {
   minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
   frame = {},
   petPanel = {}, -- floating pet panel position
+  alerts = { popup = true, sound = true, chat = true }, -- learned-ability alerts
 }
 
 local CHAR_DEFAULTS = {
@@ -241,6 +242,8 @@ local HELP = {
   "show - open the planner (also /upet on its own)",
   "scan - read the active pet again",
   "pet - show the current pet panel",
+  "alerts [popup|sound|chat on|off | test] - learned-ability alert settings",
+  "options - open the options page",
   "minimap - show or hide the minimap button",
   "debug - list the game APIs this client provides",
   "export - print the current build string",
@@ -271,6 +274,12 @@ UP.commands = {
   end,
   pet = function()
     if UP.PetPanel and UP.PetPanel.Toggle then UP.PetPanel:Toggle() else notImplemented("pet") end
+  end,
+  alerts = function(rest)
+    if UP.Alerts and UP.Alerts.Slash then UP.Alerts.Slash(rest) else notImplemented("alerts") end
+  end,
+  options = function()
+    if UP.Options and UP.Options.Open then UP.Options:Open() else notImplemented("options") end
   end,
   minimap = function()
     if UP.Minimap and UP.Minimap.Toggle then UP.Minimap:Toggle() else notImplemented("minimap") end
