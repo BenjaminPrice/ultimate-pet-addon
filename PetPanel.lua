@@ -11,7 +11,7 @@
 --   PetPanel:Refresh(), PetPanel:Hide()
 --
 -- Blizzard frames are only hooked (HookScript), never changed.
--- luacheck: read globals UIParent UISpecialFrames
+-- luacheck: read globals UIParent UISpecialFrames GameTooltip InCombatLockdown C_Spell
 local _, UP = ...
 
 local PetPanel = UP.PetPanel or {}
@@ -40,6 +40,10 @@ local ICON_SIZE = 18
 local BUTTON_HEIGHT = 22
 
 local DOT = "  \194\183  "
+-- Beast Training, the hunter spell that opens the training window (Classic spell id).
+local BEAST_TRAINING_ID = 5149
+local BEAST_TRAINING_ICON = "Interface\\Icons\\Ability_Hunter_BeastTraining"
+local TRAIN_SIZE = 14
 
 -- ---------------------------------------------------------------------------
 -- Model (pure)
@@ -84,10 +88,32 @@ local function petContext(pet)
   }
 end
 
--- One skill row: { skill, name, icon, rankText, color, nameColor }.
+-- The highest rank above `known` that the hunter has unlocked and the pet is level enough for:
+-- { rank, level, delta (TP to train it, nil when unknown), enough (unspent covers it) } or nil.
+function PetPanel.Upgrade(skill, known, ctx)
+  local def = UP.Skills[skill]
+  local unlocked = ctx.unlocked and ctx.unlocked[skill]
+  if not (def and known and type(unlocked) == "table") then return nil end
+  local best
+  for rank, info in pairs(def.ranks) do
+    if rank > known and unlocked[rank] and (info.level or 0) <= (ctx.petLevel or 0)
+      and (not best or rank > best) then
+      best = rank
+    end
+  end
+  if not best then return nil end
+  local from, to = def.ranks[known], def.ranks[best]
+  local delta
+  if to.tp ~= nil and (from == nil or from.tp ~= nil) then delta = to.tp - (from and from.tp or 0) end
+  return { rank = best, level = to.level, delta = delta,
+    enough = delta == nil or delta <= (ctx.unspent or 0) }
+end
+
+-- One skill row: { skill, name, icon, rankText, color, nameColor, upgrade }.
 local function skillRow(skill, known, target, hasBuild, ctx)
   local C = colors()
   local row = { skill = skill, name = skill, nameColor = known and C.WHITE or C.GREY }
+  row.upgrade = known and PetPanel.Upgrade(skill, known, ctx) or nil
   row.icon = UP.UI.SkillIcon(skill, known or target or 1)
   if not hasBuild then
     row.rankText, row.color = "Rank " .. known, C.WHITE
@@ -303,6 +329,86 @@ local function buildFrame()
   return f
 end
 
+-- Tooltip lines for a row's train icon.
+function PetPanel.TrainTooltip(skill, up, inCombat)
+  local lines = { { format("%s (Rank %d) can be trained.", skill, up.rank), 1, 1, 1 } }
+  if up.delta == nil then
+    lines[#lines + 1] = { "TP cost unknown.", 0.56, 0.64, 0.74 }
+  elseif up.enough then
+    lines[#lines + 1] = { format("Costs %d TP.", up.delta), 1, 1, 1 }
+  else
+    local pet = UP.Scanner and UP.Scanner.pet
+    local short = up.delta - ((pet and pet.unspent) or 0)
+    lines[#lines + 1] = { format("Costs %d TP. Needs %d more TP.", up.delta, short), 1, 0.54, 0.1 }
+  end
+  if inCombat then
+    lines[#lines + 1] = { "Leave combat to open Beast Training.", 0.6, 0.6, 0.6 }
+  else
+    lines[#lines + 1] = { "Click to open Beast Training.", 0.24, 1, 0.24 }
+  end
+  return lines
+end
+
+local function inCombat()
+  return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
+end
+
+local function showTrainTooltip(owner, rm)
+  if not (GameTooltip and rm and rm.upgrade) then return end
+  GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+  for i, l in ipairs(PetPanel.TrainTooltip(rm.skill, rm.upgrade, inCombat())) do
+    if i == 1 then GameTooltip:SetText(l[1], l[2], l[3], l[4]) else GameTooltip:AddLine(l[1], l[2], l[3], l[4]) end
+  end
+  GameTooltip:Show()
+end
+
+-- Casting Beast Training needs a secure button, and a secure button inside the panel would stop the
+-- panel from hiding in combat. So one secure button, parented to UIParent, is placed over the
+-- hovered train icon (out of combat only) and hidden again on leave or when combat starts.
+local function trainOverlay()
+  if PetPanel.overlay ~= nil then return PetPanel.overlay or nil end
+  local name = UP.lookup("C_Spell.GetSpellName") and C_Spell.GetSpellName(BEAST_TRAINING_ID) or nil
+  local ok, b = pcall(CreateFrame, "Button", "UltimatePetTrainButton", UIParent, "SecureActionButtonTemplate")
+  if not (ok and b) then
+    PetPanel.overlay = false
+    return nil
+  end
+  b:SetAttribute("type", "spell")
+  b:SetAttribute("spell", name or "Beast Training")
+  if b.RegisterForClicks then b:RegisterForClicks("AnyUp", "AnyDown") end
+  b:SetFrameStrata("DIALOG")
+  b:SetSize(TRAIN_SIZE, TRAIN_SIZE)
+  b:Hide()
+  b:SetScript("OnEnter", function(self) showTrainTooltip(self, self.rowModel) end)
+  b:SetScript("OnLeave", function(self)
+    if GameTooltip then GameTooltip:Hide() end
+    if not inCombat() then self:Hide() end
+  end)
+  PetPanel.overlay = b
+  return b
+end
+
+-- Puts the secure button over `icon`, using screen coordinates relative to UIParent only.
+local function placeOverlay(icon, rm)
+  if inCombat() then return end
+  local b = trainOverlay()
+  if not b then return end
+  local left, bottom = icon:GetLeft(), icon:GetBottom()
+  if not (left and bottom) then return end
+  local scale = (icon.GetEffectiveScale and icon:GetEffectiveScale() or 1)
+    / (UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1)
+  b:ClearAllPoints()
+  b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left * scale, bottom * scale)
+  b:SetSize(TRAIN_SIZE * scale, TRAIN_SIZE * scale)
+  b.rowModel = rm
+  b:Show()
+end
+
+UP:On("PLAYER_REGEN_DISABLED", function()
+  local b = PetPanel.overlay
+  if b then b:Hide() end
+end)
+
 local function createRow(f)
   local row = CreateFrame("Frame", nil, f)
   row:SetHeight(ROW_HEIGHT)
@@ -312,9 +418,26 @@ local function createRow(f)
   row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
   row.rank = text(row, "GameFontHighlightSmall", "RIGHT")
   row.rank:SetPoint("RIGHT", 0, 0)
+  -- Train icon: shown when a higher unlocked rank can be trained; opens Beast Training.
+  row.train = CreateFrame("Button", nil, row)
+  row.train:SetSize(TRAIN_SIZE, TRAIN_SIZE)
+  row.train:SetPoint("RIGHT", row.rank, "LEFT", -4, 0)
+  row.train.tex = row.train:CreateTexture(nil, "ARTWORK")
+  row.train.tex:SetAllPoints()
+  row.train.tex:SetTexture(BEAST_TRAINING_ICON)
+  row.train.tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+  row.train:SetScript("OnEnter", function(self)
+    showTrainTooltip(self, row.model)
+    placeOverlay(self, row.model)
+  end)
+  row.train:SetScript("OnLeave", function()
+    local b = PetPanel.overlay
+    if GameTooltip and not (b and b.IsMouseOver and b:IsMouseOver()) then GameTooltip:Hide() end
+  end)
+  row.train:Hide()
   row.name = text(row, "GameFontHighlightSmall", "LEFT")
   row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-  row.name:SetPoint("RIGHT", row.rank, "LEFT", -6, 0)
+  row.name:SetPoint("RIGHT", row.train, "LEFT", -4, 0)
   row.name:SetWordWrap(false)
   row.header = text(row, "GameFontNormalSmall", "LEFT")
   row.header:SetPoint("LEFT", 0, 0)
@@ -359,6 +482,7 @@ function PetPanel:Refresh()
       row.icon:Hide()
       row.name:Hide()
       row.rank:Hide()
+      row.train:Hide()
       y = y - HEADER_HEIGHT
     else
       row:SetHeight(ROW_HEIGHT)
@@ -371,6 +495,8 @@ function PetPanel:Refresh()
       row.rank:SetText(rm.rankText)
       setColor(row.rank, rm.color)
       row.rank:Show()
+      row.train:SetShown(rm.upgrade ~= nil)
+      if rm.upgrade then row.train.tex:SetDesaturated(not rm.upgrade.enough) end
       y = y - ROW_HEIGHT
     end
     row:Show()

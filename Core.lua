@@ -339,6 +339,7 @@ UP.commands = {
     else
       UP:Print("no pet summoned; summon one and run /upet debug again for pet values.")
     end
+    UP:Print("  Beast Training spell 5149: " .. tostring(probe("C_Spell.GetSpellName", 5149)))
     if UP.Scanner and UP.Scanner.DebugDump then
       local ok, lines = pcall(UP.Scanner.DebugDump, UP.Scanner)
       if ok and type(lines) == "table" then

@@ -290,4 +290,75 @@ describe("PetPanel", function()
       assert.is_true(UP.UI.frame:IsShown())
     end)
   end)
+
+  describe("train icon", function()
+    it("offers the highest unlocked rank the pet is level enough for", function()
+      UP.char.unlocked = { Bite = { [2] = true, [3] = true, [4] = true } }
+      local p = copy(FANG)
+      p.level, p.unspent = 16, 20 -- Bite 3 needs 16, Bite 4 needs 24
+      local up = PetPanel.Upgrade("Bite", 2, { unlocked = UP.char.unlocked, petLevel = 16, unspent = 20 })
+      assert.are.equal(3, up.rank)
+      assert.are.equal(UP.Skills.Bite.ranks[3].tp - UP.Skills.Bite.ranks[2].tp, up.delta)
+      assert.is_true(up.enough)
+      local m = PetPanel.Model(p, nil)
+      assert.are.equal(3, rowFor(m, "Bite").upgrade.rank)
+    end)
+
+    it("offers nothing when no higher rank is unlocked or the pet is too low", function()
+      UP.char.unlocked = { Bite = { [2] = true, [3] = true } }
+      assert.is_nil(PetPanel.Upgrade("Bite", 3, { unlocked = UP.char.unlocked, petLevel = 60, unspent = 99 }))
+      assert.is_nil(PetPanel.Upgrade("Bite", 2, { unlocked = UP.char.unlocked, petLevel = 10, unspent = 99 }))
+      assert.is_nil(rowFor(PetPanel.Model(copy(FANG), nil), "Bite").upgrade)
+    end)
+
+    it("marks an upgrade the pet can't afford and says how much TP is missing", function()
+      UP.char.unlocked = { Bite = { [3] = true } }
+      UP.Scanner.pet = copy(FANG)
+      local up = PetPanel.Upgrade("Bite", 2, { unlocked = UP.char.unlocked, petLevel = 16, unspent = -4 })
+      assert.is_false(up.enough)
+      local lines = PetPanel.TrainTooltip("Bite", up, false)
+      assert.are.equal("Bite (Rank 3) can be trained.", lines[1][1])
+      assert.are.equal(("Costs %d TP. Needs %d more TP."):format(up.delta, up.delta + 4), lines[2][1])
+      assert.are.equal("Click to open Beast Training.", lines[3][1])
+      assert.are.equal("Leave combat to open Beast Training.", PetPanel.TrainTooltip("Bite", up, true)[3][1])
+    end)
+
+    it("treats an unknown TP cost as affordable", function()
+      UP.char.unlocked = { Swipe = { [2] = true } }
+      local up = PetPanel.Upgrade("Swipe", 1, { unlocked = UP.char.unlocked, petLevel = 30, unspent = 0 })
+      assert.is_nil(up.delta)
+      assert.is_true(up.enough)
+      assert.are.equal("TP cost unknown.", PetPanel.TrainTooltip("Swipe", up, false)[2][1])
+    end)
+
+    it("shows the icon on rows with an upgrade and a secure Beast Training button on hover", function()
+      UP.char.unlocked = { Growl = { [2] = true } }
+      local p = copy(FANG)
+      p.unspent = 10
+      UP.Scanner.pet = p
+      wow.slash("/upet pet")
+      local f = rawget(_G, "UltimatePetPetPanel")
+      local growl
+      for _, row in ipairs(f.rows) do
+        if row.model and row.model.skill == "Growl" then growl = row end
+        if row.model and row.model.skill == "Bite" then assert.is_false(row.train:IsShown()) end
+      end
+      assert.is_true(growl.train:IsShown())
+
+      growl.train.GetLeft = function() return 100 end
+      growl.train.GetBottom = function() return 200 end
+      growl.train:GetScript("OnEnter")(growl.train)
+      local b = rawget(_G, "UltimatePetTrainButton")
+      assert.is_truthy(b)
+      assert.is_true(b:IsShown())
+
+      -- Combat hides it, and hovering in combat doesn't show it.
+      wow.fire("PLAYER_REGEN_DISABLED")
+      assert.is_false(b:IsShown())
+      _G.InCombatLockdown = function() return true end
+      growl.train:GetScript("OnEnter")(growl.train)
+      assert.is_false(b:IsShown())
+      _G.InCombatLockdown = nil
+    end)
+  end)
 end)
