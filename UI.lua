@@ -300,7 +300,8 @@ function UI.RowModel(skill, rank, ctx)
 end
 
 -- Row tooltip: a list of { text, color } and { left, right, color, rightColor } lines.
-function UI.TooltipLines(skill, rank, ctx)
+-- onLoad runs when the rank's spell text wasn't loaded yet and has since arrived.
+function UI.TooltipLines(skill, rank, ctx, onLoad)
   local def = UP.Skills[skill]
   local m = UI.RowModel(skill, rank, ctx)
   local shownRank = math.max(1, m.rank)
@@ -308,6 +309,8 @@ function UI.TooltipLines(skill, rank, ctx)
   local lines = {}
   local function add(text, color) lines[#lines + 1] = { text = text, color = color or COLORS.WHITE } end
   lines[1] = { left = skill, right = "Rank " .. shownRank, color = COLORS.WHITE, rightColor = COLORS.GREY }
+  local description = UP.SpellText(r.spellId, onLoad)
+  if description then add(description, COLORS.GOLD) end
   add("Requires pet level " .. r.level, (ctx.petLevel or 0) < r.level and COLORS.LOCKED or COLORS.WHITE)
   add("Training cost: " .. (r.tp and (r.tp .. " TP") or "unknown"))
   local source = r.source == "trainer" and "Taught by a pet trainer"
@@ -1104,10 +1107,13 @@ local function createRow(col)
   row:SetScript("OnClick", function(self)
     if self.model and self.model.clickable then UI:OpenPopover(self.model.skill, col.index) end
   end)
-  row:SetScript("OnEnter", function(self)
+  local function showTooltip(self)
     if not self.model then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    for _, line in ipairs(UI.TooltipLines(self.model.skill, self.model.rank, UI.lastState.ctx)) do
+    local function reshow()
+      if GameTooltip:IsOwned(self) then showTooltip(self) end
+    end
+    for _, line in ipairs(UI.TooltipLines(self.model.skill, self.model.rank, UI.lastState.ctx, reshow)) do
       if line.left then
         local c, rc = line.color, line.rightColor
         GameTooltip:AddDoubleLine(line.left, line.right, c[1], c[2], c[3], rc[1], rc[2], rc[3])
@@ -1116,7 +1122,8 @@ local function createRow(col)
       end
     end
     GameTooltip:Show()
-  end)
+  end
+  row:SetScript("OnEnter", showTooltip)
   row:SetScript("OnLeave", function() GameTooltip:Hide() end)
   row.minus:SetScript("OnClick", function() if row.model then UI:StepRank(row.model.skill, -1) end end)
   row.plus:SetScript("OnClick", function() if row.model then UI:StepRank(row.model.skill, 1) end end)

@@ -226,6 +226,7 @@ function ui.install(opts)
   GameTooltip.lines = {}
   function GameTooltip:SetOwner(owner) self.owner = owner self.lines = {} end
   function GameTooltip:ClearLines() self.lines = {} end
+  function GameTooltip:IsOwned(owner) return self.owner == owner and self:IsShown() end
   function GameTooltip:SetText(text) self.lines = { text } end
   function GameTooltip:AddLine(text) self.lines[#self.lines + 1] = text end
   function GameTooltip:AddDoubleLine(left, right) self.lines[#self.lines + 1] = left .. " | " .. right end

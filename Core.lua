@@ -84,6 +84,29 @@ function UP:Fire(name, ...)
   dispatch(name, ...)
 end
 
+local spellWaiters = {}
+
+-- The client's tooltip text for a spell, or nil while it isn't loaded. When nil, onLoad runs once
+-- the client has loaded it.
+function UP.SpellText(spellId, onLoad)
+  if not spellId then return nil end
+  local text = UP.call("C_Spell.GetSpellDescription", spellId)
+  if type(text) ~= "string" or text == "" then text = UP.call("GetSpellDescription", spellId) end
+  if type(text) == "string" and text ~= "" then return text end
+  if onLoad then
+    local waiting = spellWaiters[spellId]
+    spellWaiters[spellId] = onLoad
+    if not waiting then UP.call("C_Spell.RequestLoadSpellData", spellId) end
+  end
+  return nil
+end
+
+UP:On("SPELL_DATA_LOAD_RESULT", function(spellId, success)
+  local onLoad = spellWaiters[spellId]
+  spellWaiters[spellId] = nil
+  if onLoad and success then onLoad() end
+end)
+
 
 UP.DB_VERSION = 3
 
