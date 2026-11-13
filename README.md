@@ -27,6 +27,9 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
    button opens the same panel on its own.
 8. When you learn a new rank from a tamed beast, a popup and a sound tell you which one. Turn
    either off in the options page or with `/upet alerts`.
+9. Some ranks new in Forever have no known TP cost and show `?`. When a summoned pet knows exactly
+   one of them, UltimatePet works the cost out from the pet's used training points and remembers it
+   for all your characters.
 
 ## Install
 

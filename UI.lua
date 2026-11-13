@@ -942,6 +942,7 @@ local function buildWindow()
 
   f:SetScript("OnShow", function() UI:Refresh() end)
   f:SetScript("OnHide", function()
+    if UP.PetPanel and UP.PetPanel.docked then UP.PetPanel:Hide() end
     UI:ClosePopover()
     GameTooltip:Hide()
     if ownMenu then ownMenu:Hide() end

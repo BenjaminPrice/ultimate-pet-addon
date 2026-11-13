@@ -220,6 +220,23 @@ describe("PetPanel", function()
   end)
 
   describe("floating", function()
+    it("closes with the planner when docked beside it, but not after being dragged away", function()
+      setPet(FANG)
+      UP.UI:Toggle()
+      UP.UI.w.petViewButton:Click()
+      local f = PetPanel:Create()
+      assert.is_true(PetPanel.docked)
+      UP.UI:Toggle()
+      assert.is_false(f:IsShown())
+
+      UP.UI:Toggle()
+      UP.UI.w.petViewButton:Click()
+      stub.fire(f, "OnDragStop")
+      assert.is_false(PetPanel.docked)
+      UP.UI:Toggle()
+      assert.is_true(f:IsShown())
+    end)
+
     it("opens beside the planner and in front of it from the Pet view button", function()
       setPet(FANG)
       local strata

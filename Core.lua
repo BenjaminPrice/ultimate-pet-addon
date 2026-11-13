@@ -92,6 +92,7 @@ local GLOBAL_DEFAULTS = {
   frame = {},
   petPanel = {}, -- floating pet panel position
   alerts = { popup = true, sound = true, chat = true }, -- learned-ability alerts
+  tpCosts = {}, -- [skill][rank] = TP, costs missing from the data and worked out from a summoned pet
 }
 
 local CHAR_DEFAULTS = {
