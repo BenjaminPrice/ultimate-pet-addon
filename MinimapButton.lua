@@ -82,5 +82,12 @@ function Minimap:Toggle()
     or "Minimap button shown.")
 end
 
+-- Points LibDBIcon at the current settings table (after a full reset replaces it).
+function Minimap:Rebind()
+  if self.registered and self.icon and settings() then
+    pcall(self.icon.Refresh, self.icon, NAME, settings())
+  end
+end
+
 -- LibDBIcon needs the saved settings, so register after the DB is ready.
 UP:On("PLAYER_LOGIN", function() Minimap:Init() end)

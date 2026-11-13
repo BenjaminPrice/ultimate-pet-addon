@@ -278,6 +278,11 @@ UP.commands = {
       UP:Print("usage: /upet import <string>")
       return
     end
+    -- The planner's import applies the same checks as its Import button.
+    if UP.UI and UP.UI.Import then
+      UP.UI:Import(rest)
+      return
+    end
     local ok, result = UP.Serializer.Decode(rest)
     if not ok then
       UP:Print("Import failed: " .. result)
@@ -292,6 +297,7 @@ UP.commands = {
     local all = rest:match("^all") ~= nil
     if rest:match("confirm$") then
       UP:ResetDB(all)
+      if all and UP.Minimap and UP.Minimap.Rebind then UP.Minimap:Rebind() end
       UP:Print(all and "all saved data reset." or "data for " .. UP:CharKey() .. " reset.")
     else
       UP:Print("this wipes " .. (all and "ALL saved data" or "data for " .. UP:CharKey())

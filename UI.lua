@@ -251,10 +251,10 @@ function UI.StatusLabel(st)
   local code = st.code
   if code == "TRAINED" then return "Trained" end
   if code == "READY" then return "Ready to Train" end
-  if code == "NEED_LEVEL" then return "Unlocked \226\128\147 Need Lv " .. st.level end
-  if code == "NEED_TP" then return "Unlocked \226\128\147 Need " .. st.short .. " more TP" end
+  if code == "NEED_LEVEL" then return "Unlocked - Need Lv " .. st.level end
+  if code == "NEED_TP" then return "Unlocked - Need " .. st.short .. " more TP" end
   if code == "TRAINER" then return "Trainer" end
-  if code == "TRAINER_LEVEL" then return "Trainer \226\128\147 Need Lv " .. st.level end
+  if code == "TRAINER_LEVEL" then return "Trainer - Need Lv " .. st.level end
   if code == "NO_SOURCE" then return "No known source" end
   return "Not Unlocked"
 end
@@ -287,7 +287,7 @@ function UI.RowModel(skill, rank, ctx)
     clickable = false, levelBad = false,
   }
   if rank == 0 then
-    m.levelText, m.tpText, m.tpColor = "", "\226\128\147", COLORS.DIM
+    m.levelText, m.tpText, m.tpColor = "", "-", COLORS.DIM
     m.label, m.color = "Not taken", COLORS.ZERO
     return m
   end
@@ -991,6 +991,8 @@ local function buildTopBar(f, w)
   w.presetDD.frame:SetPoint("TOPLEFT", 248, w.presetDD.own and -32 or -30)
 
   w.useCheck = checkButton(f, "Use current pet")
+  -- Disabled buttons only fire OnEnter with motion scripts on; the tooltip explains why it's off.
+  if w.useCheck.SetMotionScriptsWhileDisabled then w.useCheck:SetMotionScriptsWhileDisabled(true) end
   w.useCheck:SetPoint("TOPLEFT", 498, -32)
   w.useCheck:SetScript("OnClick", function(self) UI:SetUseCurrent(self:GetChecked() and true or false) end)
   tooltipFor(w.useCheck, function()
@@ -1276,8 +1278,8 @@ local function refreshTopBar(w, s)
   setColor(w.useCheck.label, canUse and COLORS.WHITE or COLORS.GREY)
 
   UI.updating = true
-  w.levelSlider:SetValue(s.level or 1)
-  w.loyaltySlider:SetValue(s.loyalty or 1)
+  pcall(w.levelSlider.SetValue, w.levelSlider, s.level or 1)
+  pcall(w.loyaltySlider.SetValue, w.loyaltySlider, s.loyalty or 1)
   UI.updating = false
   setEnabled(w.levelSlider, not s.live)
   setEnabled(w.loyaltySlider, not s.live)
@@ -1403,7 +1405,8 @@ local function refreshPopover(w, s, actives, passives)
     p.footer:SetText(m.footer)
     p.footer:ClearAllPoints()
     p.footer:SetPoint("TOPLEFT", 10, y - 2)
-    y = y - 36
+    local h = p.footer.GetStringHeight and tonumber(p.footer:GetStringHeight()) or 0
+    y = y - math.max(36, h + 8)
   end
   p:SetHeight(-y + 6)
   p:ClearAllPoints()

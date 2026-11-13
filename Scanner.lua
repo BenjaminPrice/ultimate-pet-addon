@@ -202,11 +202,9 @@ function Scanner:ScanTrainer()
     if name and status ~= "header" then
       local spellId = serviceSpellId(i)
       local skill, rank
-      if spellId then
-        skill, rank = self:SkillOfSpell(spellId)
-      else
-        skill, rank = skillOfName(name, rankText)
-      end
+      if spellId then skill, rank = self:SkillOfSpell(spellId) end
+      -- The link may carry a different spell id than the pet spell; fall back to the name.
+      if not skill then skill, rank = skillOfName(name, rankText) end
       if skill then
         scan.matched = scan.matched + 1
         if beast or status == "used" then
@@ -294,14 +292,17 @@ local function loyaltyLevel(text, total, level)
   end
 end
 
-local function petKey(name)
+-- A key that stays the same across summons: the stable's petNumber, else name and family.
+-- (A pet's GUID changes on every summon, so it isn't used.)
+local function petKey(name, family)
   local list = call("C_StableInfo.GetActivePetList")
   if type(list) == "table" then
     for _, info in pairs(list) do
       if type(info) == "table" and info.name == name and info.petNumber then return info.petNumber end
     end
   end
-  return call("UnitGUID", "pet")
+  if name then return tostring(name) .. "|" .. tostring(family) end
+  return nil
 end
 
 local function readSpellbook()
@@ -358,7 +359,7 @@ local function buildPet()
   pet.loyalty = loyaltyLevel(loyaltyText, pet.tpTotal, pet.level)
   local spellCount, unmatched
   pet.known, spellCount, unmatched = readSpellbook()
-  pet.key = petKey(pet.name)
+  pet.key = petKey(pet.name, pet.family)
   return pet, spellCount, unmatched
 end
 

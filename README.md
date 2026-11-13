@@ -7,10 +7,20 @@ UltimatePet combines a training point (TP) calculator, preset builds for every p
 tracking of the ranks your Hunter has unlocked in Beast Training, and waypoints (TomTom or the
 built-in map pin) to the tameable beasts that teach ranks you are missing.
 
-> **Status: early development.** Phase 1 (scaffold, saved data, slash commands, tooling) and
-> phase 2 (ability and beast data) are done. Phase 3 adds the planner logic, build strings
-> (`/upet export`, `/upet import <string>`) and suggested presets for every family. The scanner and
-> UI are not built yet, so `show` and `scan` say "not implemented yet".
+> **Status: first playable build.** Planner window, Beast Training and pet scanning, presets for
+> all 19 families, build strings, waypoints and a minimap button are in. Not yet checked in game;
+> report problems with the output of `/upet debug`.
+
+## Using it
+
+1. Open your Beast Training window once (the spellbook icon). UltimatePet reads which ranks you
+   know. Do it again after learning new ranks.
+2. Type `/upet` or click the minimap button to open the planner.
+3. Pick a family and a preset, or tick **Use current pet** to plan for the pet you have out.
+4. Each chosen rank shows its status: Trained, Ready to Train, Unlocked (with what's missing),
+   Not Unlocked, Trainer (bought from a pet trainer) or No known source.
+5. Click a **Not Unlocked** rank to list beasts that teach it, then **Waypoint** to mark one.
+6. Save builds, set one active for your current pet, or share them with Export and Import.
 
 ## Install
 
@@ -24,7 +34,10 @@ ln -s ~/dev/wow/ultimate-pet "<WoW Forever folder>/Interface/AddOns/UltimatePet"
 
 On Windows, use `mklink /D "<WoW folder>\Interface\AddOns\UltimatePet" C:\path\to\ultimate-pet`.
 
-TomTom is optional. If it is installed, waypoints go through it.
+TomTom is optional. If it is installed, waypoints go through it; otherwise the built-in map pin is used.
+
+The minimap button uses LibDataBroker and LibDBIcon (embedded in `Libs/`), so minimap button
+collectors such as EllesmereUI's minimap module and broker bars such as Titan Panel pick it up.
 
 ## Slash commands
 
@@ -32,11 +45,12 @@ TomTom is optional. If it is installed, waypoints go through it.
 
 | Command | What it does |
 |---|---|
-| `show` | Open the planner window *(not implemented yet)* |
-| `scan` | Rescan the active pet *(not implemented yet)* |
-| `debug` | Print the client build and which game APIs this client provides (paste it into bug reports) |
-| `export` | Print the current build as a shareable string *(not implemented yet)* |
-| `import <string>` | Load a build string *(not implemented yet)* |
+| (none) or `show` | Open or close the planner window |
+| `scan` | Read the active pet again and print its family, level and TP |
+| `minimap` | Show or hide the minimap button |
+| `debug` | Print the client build, which game APIs exist, the pet and scanner state (paste it into bug reports) |
+| `export` | Print the current build as a shareable string |
+| `import <string>` | Load a build string |
 | `reset confirm` | Wipe this character's saved data (`reset` alone only explains) |
 | `reset all confirm` | Wipe all characters' data and global settings |
 | `help` | List the commands (also shown for a bare `/upet`) |

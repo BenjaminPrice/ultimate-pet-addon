@@ -282,10 +282,10 @@ describe("Scanner", function()
       assert.matches("unknown family", UP.Scanner:DebugDump()[1], 1, true)
     end)
 
-    it("uses the GUID when the stable list has no entry", function()
+    it("uses name and family when the stable list has no entry", function()
       forPet({})
       set("C_StableInfo", nil)
-      assert.are.equal("Pet-0-1-2-3-4-0000ABCD", UP.Scanner:ReadPet().key)
+      assert.are.equal("Fang|Wolf", UP.Scanner:ReadPet().key)
     end)
 
     it("reports no pet and fires only when the state changes", function()
