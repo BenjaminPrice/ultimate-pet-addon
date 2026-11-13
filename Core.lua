@@ -1,5 +1,3 @@
--- UltimatePet: Core.lua
--- Namespace, event dispatcher, SavedVariables defaults and migrations, slash commands.
 local addonName, UP = ...
 
 UP.name = addonName
@@ -30,9 +28,6 @@ function UP.call(path, ...)
   return unpack(res, 2, table.maxn(res))
 end
 
--- ---------------------------------------------------------------------------
--- Output
--- ---------------------------------------------------------------------------
 
 local PREFIX = "|cffabd473UltimatePet|r: "
 
@@ -49,13 +44,8 @@ function UP:Print(...)
   end
 end
 
--- ---------------------------------------------------------------------------
--- Events and internal messages
--- ---------------------------------------------------------------------------
--- UP:On(name, fn) subscribes fn(...) to a game event or an internal message. Game events are
--- registered on the shared frame; names in UP.MESSAGES are internal and only reach handlers through
--- UP:Fire(name, ...). Handlers receive the event's arguments, not the event name.
-
+-- UP:On(name, fn) subscribes to a game event or, for names in UP.MESSAGES, an internal message
+-- sent with UP:Fire. Handlers receive the arguments without the event name.
 UP.MESSAGES = {
   STATE_CHANGED = true, -- scanned data, the active pet or the DB changed; the UI refreshes
 }
@@ -94,9 +84,6 @@ function UP:Fire(name, ...)
   dispatch(name, ...)
 end
 
--- ---------------------------------------------------------------------------
--- SavedVariables
--- ---------------------------------------------------------------------------
 
 UP.DB_VERSION = 3
 
@@ -199,7 +186,6 @@ function UP:CurrentBuild()
   return UP.Planner.CopyBuild(UP.Planner.Preset(family))
 end
 
--- Stores build as this character's current build and tells the UI.
 function UP:SetCurrentBuild(build)
   UP.char.currentBuild = build
   UP:Fire("STATE_CHANGED")
@@ -212,9 +198,6 @@ UP:On("ADDON_LOADED", function(name)
   UP:Fire("STATE_CHANGED")
 end)
 
--- ---------------------------------------------------------------------------
--- Slash commands
--- ---------------------------------------------------------------------------
 
 local function notImplemented(cmd)
   UP:Print("'" .. cmd .. "' is not implemented yet.")
@@ -227,7 +210,7 @@ local HELP = {
   "alerts [popup|sound|chat on|off | test] - learned-ability alert settings",
   "options - open the options page",
   "minimap - show or hide the minimap button",
-  "debug - list the game APIs this client provides",
+  "debug - print the version and scanner state for bug reports",
   "export - print the current build string",
   "import <string> - load a build string",
   "reset [all] confirm - wipe this character's data (or everything with 'all')",
@@ -274,7 +257,6 @@ UP.commands = {
       UP:Print("usage: /upet import <string>")
       return
     end
-    -- The planner's import applies the same checks as its Import button.
     if UP.UI and UP.UI.Import then
       UP.UI:Import(rest)
       return

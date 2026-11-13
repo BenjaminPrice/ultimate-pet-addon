@@ -1,16 +1,6 @@
 local wow = dofile("tests/wowstub.lua")
 
--- Game APIs the scanner reads that tests/wowstub.lua does not provide. Installed per test through
--- set() and restored afterwards, so other specs see the stub's plain client.
-local saved = {}
-local function set(name, value)
-  if not saved[name] then saved[name] = { value = rawget(_G, name) } end
-  _G[name] = value
-end
-local function restore()
-  for name, old in pairs(saved) do _G[name] = old.value end
-  saved = {}
-end
+local set = wow.set
 
 local function spell(UP, skill, rank)
   return UP.Skills[skill].ranks[rank].spellId
@@ -69,7 +59,7 @@ local function npc(kind)
   end)
 end
 
--- The verified Forever pet: L10 Rebellious Wolf, TP 0 total / 4 used, petNumber 7.
+-- A real Forever pet: L10 Rebellious Wolf 'Fang', TP 0 total / 4 used, petNumber 7.
 local function forPet(book, overrides)
   overrides = overrides or {}
   set("__petExists", true)
@@ -114,7 +104,7 @@ describe("Scanner", function()
     set("time", function() return 1234 end)
   end)
 
-  after_each(restore)
+  after_each(wow.restore)
 
   describe("Beast Training", function()
     local function window(U)

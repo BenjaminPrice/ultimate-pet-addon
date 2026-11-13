@@ -1,7 +1,6 @@
--- UltimatePet: minimap button and broker launcher.
--- A LibDataBroker launcher shown on the minimap by LibDBIcon. The button is named
--- LibDBIcon10_UltimatePet, which minimap button collectors (EllesmereUIMinimap and others) group
--- with other addons; broker displays (Titan Panel, ElvUI datatexts, ...) can show the launcher.
+-- UltimatePet: MinimapButton.lua
+-- A LibDataBroker launcher, shown on the minimap by LibDBIcon (as LibDBIcon10_UltimatePet, which
+-- minimap button collectors group with other addons).
 local _, UP = ...
 -- luacheck: read globals UIParent UISpecialFrames
 
@@ -11,7 +10,6 @@ local Minimap = UP.Minimap
 local NAME = "UltimatePet"
 local ICON = "Interface\\Icons\\Ability_Hunter_BeastTraining"
 
--- Returns the library, or nil when LibStub or the library is not loaded.
 local function lib(name)
   local stub = rawget(_G, "LibStub")
   if not stub then return nil end
@@ -40,7 +38,6 @@ local function openPetView()
   end
 end
 
--- Entries of the right-click menu, in order.
 Minimap.MENU = {
   { text = "Skill planner", func = openPlanner },
   { text = "Pet view", func = openPetView },
@@ -49,8 +46,8 @@ Minimap.MENU = {
 local MENU_WIDTH, MENU_ROW, MENU_PAD = 150, 18, 6
 local MENU_LINGER = 1.5 -- seconds the menu stays after the mouse leaves it
 
--- Our own menu frame. Blizzard's context menu sits below minimap collectors such as EllesmereUI's,
--- so its clicks fell through to the button underneath; this one is drawn on the top strata.
+-- Drawn on the top strata: Blizzard's context menu sits below minimap collectors such as
+-- EllesmereUI's, and its clicks go through to the button underneath.
 local function buildMenu()
   local f = CreateFrame("Frame", "UltimatePetMinimapMenu", UIParent, "BackdropTemplate")
   f:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -92,7 +89,6 @@ local function buildMenu()
     end)
     f.buttons[i] = b
   end
-  -- Close after the mouse has been away for a moment, or on a click anywhere else.
   f:SetScript("OnUpdate", function(self, elapsed)
     if self:IsMouseOver() then
       self.away = 0
@@ -110,7 +106,7 @@ local function buildMenu()
   return f
 end
 
--- Shows the right-click menu at the cursor (or beside the button). A second right-click closes it.
+-- A second right-click closes the menu.
 function Minimap:OpenMenu(owner)
   local f = self.menu or buildMenu()
   self.menu = f
@@ -134,7 +130,6 @@ function Minimap:OpenMenu(owner)
   if f.Raise then f:Raise() end
 end
 
--- Left-click opens or closes the planner; right-click shows the menu.
 function Minimap.OnClick(frame, button)
   if button == "RightButton" then
     Minimap:OpenMenu(frame)
@@ -144,7 +139,6 @@ function Minimap.OnClick(frame, button)
   return button
 end
 
--- Fills the tooltip shown by LibDBIcon and broker displays.
 function Minimap.OnTooltipShow(tooltip)
   if not (tooltip and tooltip.AddLine) then return end
   tooltip:AddLine("UltimatePet")
@@ -162,7 +156,6 @@ function Minimap.OnTooltipShow(tooltip)
   end
 end
 
--- Registers the launcher and the minimap button. Safe to call more than once.
 function Minimap:Init()
   if self.registered then return true end
   local ldb, icon = lib("LibDataBroker-1.1"), lib("LibDBIcon-1.0")
@@ -181,7 +174,6 @@ function Minimap:Init()
   return ok
 end
 
--- Shows or hides the minimap button and remembers the choice.
 function Minimap:Toggle()
   local mm = settings()
   if not mm then return end
@@ -194,12 +186,11 @@ function Minimap:Toggle()
     or "Minimap button shown.")
 end
 
--- Points LibDBIcon at the current settings table (after a full reset replaces it).
+-- Points LibDBIcon at the current settings table after a full reset replaces it.
 function Minimap:Rebind()
   if self.registered and self.icon and settings() then
     pcall(self.icon.Refresh, self.icon, NAME, settings())
   end
 end
 
--- LibDBIcon needs the saved settings, so register after the DB is ready.
 UP:On("PLAYER_LOGIN", function() Minimap:Init() end)

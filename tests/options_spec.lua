@@ -1,13 +1,5 @@
--- Options page: registration with Settings or InterfaceOptions, and checkboxes bound to the DB.
 local wow = dofile("tests/wowstub.lua")
 local stub = dofile("tests/uistub.lua")
-
-local function loadAddonFile(path, ns)
-  local chunk = assert(loadfile(path))
-  chunk("UltimatePet", ns)
-end
-
-local STUBBED = { "Settings", "InterfaceOptions_AddCategory", "InterfaceOptionsFrame_OpenToCategory", "PlaySound" }
 
 describe("Options", function()
   local UP, Options, rec
@@ -17,21 +9,19 @@ describe("Options", function()
     stub.install()
     rec = { opened = {} }
     if apis.settings then
-      _G.Settings = {
+      wow.set("Settings", {
         RegisterCanvasLayoutCategory = function(frame, name)
           rec.canvas = { frame = frame, name = name }
           return { GetID = function() return 42 end }
         end,
         RegisterAddOnCategory = function(category) rec.addon = category end,
         OpenToCategory = function(id) rec.opened[#rec.opened + 1] = id end,
-      }
+      })
     end
     if apis.interfaceOptions then
-      _G.InterfaceOptions_AddCategory = function(frame) rec.added = frame end
-      _G.InterfaceOptionsFrame_OpenToCategory = function(frame) rec.opened[#rec.opened + 1] = frame end
+      wow.set("InterfaceOptions_AddCategory", function(frame) rec.added = frame end)
+      wow.set("InterfaceOptionsFrame_OpenToCategory", function(frame) rec.opened[#rec.opened + 1] = frame end)
     end
-    loadAddonFile("Alerts.lua", UP)
-    loadAddonFile("Options.lua", UP)
     wow.fire("ADDON_LOADED", "UltimatePet")
     wow.fire("PLAYER_LOGIN")
     Options = UP.Options
@@ -40,8 +30,7 @@ describe("Options", function()
 
   after_each(function()
     stub.uninstall()
-    for _, name in ipairs(STUBBED) do _G[name] = nil end
-    _G.UltimatePetOptionsPanel = nil
+    wow.restore()
   end)
 
   it("registers a canvas category with Settings on login and opens to it", function()
@@ -119,7 +108,7 @@ describe("Options", function()
     end)
 
     it("runs a test alert and opens the planner from its buttons", function()
-      _G.PlaySound = function() end
+      wow.set("PlaySound", function() end)
       Options.testButton:Click()
       assert.are.same({ "UltimatePet: New pet ability: Claw (Rank 2)." }, wow.takeChat())
       local shown = false

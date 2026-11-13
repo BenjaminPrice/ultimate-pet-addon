@@ -1,15 +1,8 @@
--- Learned-ability alerts: chat and spell-id detection, merging, filters, notification and slash.
 -- luacheck: globals C_Spell
 local wow = dofile("tests/wowstub.lua")
 local stub = dofile("tests/uistub.lua")
 
--- Runs one of the addon's files the way the game does (not in the TOC yet).
-local function loadAddonFile(path, ns)
-  local chunk = assert(loadfile(path))
-  chunk("UltimatePet", ns)
-end
-
--- Client names for some rank 1 spell ids (German, so English matching can't pass by accident).
+-- German client names, so English matching can't pass by accident.
 local CLIENT_NAMES = { [16827] = "Klaue", [17253] = "Biss" }
 
 describe("Alerts", function()
@@ -19,13 +12,12 @@ describe("Alerts", function()
     opts = opts or {}
     UP = wow.load()
     stub.install()
-    _G.ERR_LEARN_ABILITY_S = opts.format or "You have learned a new ability: %s."
-    _G.ERR_LEARN_SPELL_S = "You have learned a new spell: %s."
+    wow.set("ERR_LEARN_ABILITY_S", opts.format or "You have learned a new ability: %s.")
+    wow.set("ERR_LEARN_SPELL_S", "You have learned a new spell: %s.")
     C_Spell.GetSpellName = function(id) return CLIENT_NAMES[id] end
     sounds = {}
-    _G.PlaySound = function(id, channel) sounds[#sounds + 1] = { id, channel } end
-    _G.SOUNDKIT = { LEVELUPSOUND = 888 }
-    loadAddonFile("Alerts.lua", UP)
+    wow.set("PlaySound", function(id, channel) sounds[#sounds + 1] = { id, channel } end)
+    wow.set("SOUNDKIT", { LEVELUPSOUND = 888 })
     wow.fire("ADDON_LOADED", "UltimatePet")
     Alerts = UP.Alerts
     changes = 0
@@ -38,11 +30,7 @@ describe("Alerts", function()
   before_each(function() load() end)
   after_each(function()
     stub.uninstall()
-    local stubbed = { "ERR_LEARN_ABILITY_S", "ERR_LEARN_SPELL_S", "PlaySound", "SOUNDKIT", "ClassTrainerFrame" }
-    for _, name in ipairs(stubbed) do
-      _G[name] = nil
-    end
-    _G.UltimatePetLearnAlert = nil
+    wow.restore()
   end)
 
   describe("Pattern", function()
@@ -141,7 +129,7 @@ describe("Alerts", function()
 
     it("treats a hidden ClassTrainerFrame as a closed trainer", function()
       wow.fire("TRAINER_SHOW")
-      _G.ClassTrainerFrame = { IsShown = function() return false end }
+      wow.set("ClassTrainerFrame", { IsShown = function() return false end })
       wow.fire("CHAT_MSG_SYSTEM", "You have learned a new ability: Klaue (Rang 2).")
       assert.is_true(UP.char.unlocked.Claw[2])
     end)
@@ -173,7 +161,6 @@ describe("Alerts", function()
     it("defaults popup, sound and chat on without overwriting saved values", function()
       assert.are.same({ popup = true, sound = true, chat = true }, UP.db.global.alerts)
       UP = wow.load({ saved = { version = 2, global = { alerts = { sound = false } } } })
-      loadAddonFile("Alerts.lua", UP)
       wow.fire("ADDON_LOADED", "UltimatePet")
       assert.are.same({ popup = true, sound = false, chat = true }, UP.db.global.alerts)
     end)

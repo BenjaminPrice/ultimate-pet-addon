@@ -6,16 +6,13 @@
 --   wow.slash("/upet help")
 --   wow.chat                               -- every AddMessage line, colour codes stripped
 --
--- wow.load() resets the stubbed globals first, so each call is an independent client session.
--- Pass { saved = tbl } to start with existing SavedVariables, { player = "Name", realm = "Realm" }
--- for another character, { petFamily = "Wolf" } for a summoned pet, and { root = "path" } when not
--- running from the repository root.
+-- Each wow.load() is an independent client session for character Tester-Forever. Pass
+-- { saved = tbl } to start with existing SavedVariables and { petFamily = "Wolf" } for a summoned pet.
 
 local wow = {}
 
 local ADDON = "UltimatePet"
 
--- Every global the stub installs, so reset() can clear the previous session's.
 local INSTALLED = {
   "CreateFrame", "UnitName", "UnitCreatureFamily", "GetRealmName", "GetTime", "GetBuildInfo", "GetAddOnMetadata",
   "C_AddOns", "C_Timer", "DEFAULT_CHAT_FRAME", "SlashCmdList", "UltimatePetDB",
@@ -24,6 +21,13 @@ local INSTALLED = {
 
 local function strip(msg)
   return (msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
+function wow.copy(t)
+  if type(t) ~= "table" then return t end
+  local out = {}
+  for k, v in pairs(t) do out[k] = wow.copy(v) end
+  return out
 end
 
 ---Reads a .toc: the files it lists (in order, "/" separators) and its "## Key: value" metadata.
@@ -58,8 +62,6 @@ function wow.reset(opts)
   function CreateFrame(frameType, name)
     local f = { type = frameType, name = name, events = {}, scripts = {} }
     function f:RegisterEvent(event) self.events[event] = true end
-    function f:UnregisterEvent(event) self.events[event] = nil end
-    function f:UnregisterAllEvents() self.events = {} end
     function f:IsEventRegistered(event) return self.events[event] == true end
     function f:SetScript(script, fn) self.scripts[script] = fn end
     function f:GetScript(script) return self.scripts[script] end
@@ -72,14 +74,14 @@ function wow.reset(opts)
   end
 
   function UnitName(unit)
-    if unit == "player" then return opts.player or "Tester" end
+    if unit == "player" then return "Tester" end
     return nil
   end
   function UnitCreatureFamily(unit)
     if unit == "pet" then return opts.petFamily end
     return nil
   end
-  function GetRealmName() return opts.realm or "Forever" end
+  function GetRealmName() return "Forever" end
   function GetTime() return wow.now end
   function GetBuildInfo() return "1.60.0", "00000", "Jan 1 2026", 16001 end
   C_AddOns = {
@@ -98,24 +100,30 @@ function wow.reset(opts)
   UltimatePetDB = opts.saved
 end
 
----Resets the client and runs every file of the TOC with (addonName, ns), as the game does.
----Returns the addon's namespace.
+---Runs one addon file with (addonName, ns), as the game does.
+function wow.run(file, ns)
+  assert(loadfile(file))(ADDON, ns)
+end
+
+---Resets the client and runs every file of the TOC. Returns the addon's namespace.
 function wow.load(opts)
-  opts = opts or {}
-  local root = opts.root or "."
-  local files, meta = wow.readToc(root .. "/" .. ADDON .. ".toc")
+  local files, meta = wow.readToc(ADDON .. ".toc")
   wow.meta = meta
   wow.reset(opts)
   local ns = {}
   for _, file in ipairs(files) do
-    -- XML files only embed third-party libraries (Libs/embeds.xml); tests stub those instead.
-    if not file:match("%.xml$") then
-      local chunk = assert(loadfile(root .. "/" .. file))
-      chunk(ADDON, ns)
-    end
+    -- XML files only embed third-party libraries (Libs/embeds.xml); specs stub those instead.
+    if not file:match("%.xml$") then wow.run(file, ns) end
   end
-  wow.ns = ns
   return ns
+end
+
+---wow.load(), ADDON_LOADED, and the load-time chat discarded.
+function wow.start(opts)
+  local UP = wow.load(opts)
+  wow.fire("ADDON_LOADED", ADDON)
+  wow.takeChat()
+  return UP
 end
 
 ---Delivers a game event to every frame that registered it.
@@ -151,6 +159,30 @@ function wow.takeChat()
   local lines = wow.chat
   wow.chat = {}
   return lines
+end
+
+---Sets the scanned pet (nil for none) and fires STATE_CHANGED.
+function wow.setPet(UP, pet)
+  UP.Scanner.pet = pet and wow.copy(pet) or { exists = false, known = {} }
+  UP:Fire("STATE_CHANGED")
+end
+
+function wow.chatText()
+  return table.concat(wow.takeChat(), "\n")
+end
+
+-- Extra globals a spec installs. Written to the real _G (busted sandboxes a spec's own global
+-- writes, which addon code would not see) and put back by wow.restore().
+local saved = {}
+
+function wow.set(name, value)
+  if not saved[name] then saved[name] = { value = rawget(_G, name) } end
+  _G[name] = value
+end
+
+function wow.restore()
+  for name, old in pairs(saved) do _G[name] = old.value end
+  saved = {}
 end
 
 return wow

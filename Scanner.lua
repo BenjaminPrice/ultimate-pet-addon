@@ -1,31 +1,11 @@
 -- UltimatePet: Scanner.lua
--- Reads the game: the Beast Training window (which ranks this hunter knows) and the active pet.
+-- Reads the Beast Training window (which ranks this hunter knows) and the active pet.
 --
--- Public API
---   Scanner:ScanTrainer()           read the open trainer window; returns the number of pet ranks it matched
---   Scanner:ReadPet()               read the active pet now; returns UP.Scanner.pet
---   Scanner:RequestPetRead()        read the active pet after 0.2 s, coalescing bursts of events
---   Scanner:IsUnlocked(skill, rank) true when Beast Training has listed that rank
---   Scanner:HasScanned()            true once Beast Training has been read on this character
---   Scanner:Context()               state for Planner.Status (shape below)
---   Scanner:DebugDump()             list of strings describing the last pet read and trainer scan
---   Scanner:SkillOfSpell(spellId)   skill name, rank for a spell id in Data/Skills.lua; nil otherwise
---
--- Scanner.pet (always a table; exists = false without a pet):
---   { exists, name, family, familyId, level, loyalty (1-6 or nil), loyaltyName, tpTotal, tpUsed,
---     unspent (tpTotal - tpUsed, may be negative on Forever), known = { [skill] = maxRank }, key }
---
--- Scanner:Context() returns a fresh table:
---   { hasPet    = boolean,
---     petLevel  = number (0 without a pet),
---     petFamily = English family name or nil,
---     unspent   = number (0 without a pet; may be negative),
---     loyalty   = number or nil,
---     known     = { [skill] = highest rank in the pet's spellbook },
---     unlocked  = { [skill] = { [rank] = true } } }   -- name-keyed, the per-character DB table itself
---
--- Saved per character (UP.char): unlocked[skill][rank] = true (only grows),
--- scannedAt = time() of the last Beast Training scan.
+-- Scanner.pet (exists = false without a pet):
+--   { exists, name, family, familyId, familyKnown, level, loyalty (1-6 or nil), loyaltyName, tpTotal,
+--     tpUsed, unspent (may be negative on Forever), known = { [skill] = maxRank }, key }
+-- Saved per character (UP.char): unlocked[skill][rank] = true (only grows), scannedAt = time() of the
+-- last Beast Training scan.
 --
 -- Approach learned from TrueshotLodge src/training.lua and Huntsworn Core/Pet.lua (MIT); re-implemented.
 local _, UP = ...
@@ -53,16 +33,9 @@ local FAMILY_ALIASES = { Owl = "Bird of Prey" }
 local TRAINER_STATUSES = { used = true, available = true, unavailable = true, header = true }
 
 Scanner.pet = { exists = false, known = {} }
-Scanner.lastScan = nil
-Scanner.lastPetRead = nil
-
--- ---------------------------------------------------------------------------
--- Helpers
--- ---------------------------------------------------------------------------
 
 local lookup, call = UP.lookup, UP.call
 
--- The first of several dotted paths that exists, called.
 local function callFirst(paths, ...)
   for _, path in ipairs(paths) do
     if type(lookup(path)) == "function" then return call(path, ...) end
@@ -82,7 +55,6 @@ local function now()
   return os and os.time and os.time() or 0
 end
 
--- spellId -> { skill, rank } and lowercase English name -> skill, built from Data/Skills.lua once.
 local bySpell, byName
 local function buildIndex()
   if bySpell then return end
@@ -103,7 +75,7 @@ function Scanner:SkillOfSpell(spellId)
   if entry then return entry.skill, entry.rank end
 end
 
--- Skill and rank from an English name and rank text ("Rank 3"); the fallback when there is no spell id.
+-- rankText: "Rank 3". Used when there is no spell id.
 local function skillOfName(name, rankText)
   buildIndex()
   if type(name) ~= "string" then return end
@@ -116,14 +88,6 @@ local function skillOfName(name, rankText)
   if rank and ranks[rank] then return skill, rank end
 end
 
-local function char()
-  return UP.char
-end
-
--- ---------------------------------------------------------------------------
--- Beast Training
--- ---------------------------------------------------------------------------
-
 -- Beast Training opens with no npc (at most a targeted beast); a pet trainer or stable master is an npc.
 local function isBeastTraining()
   local exists = call("UnitExists", "npc")
@@ -132,7 +96,7 @@ local function isBeastTraining()
   return call("UnitCreatureType", "npc") == "Beast"
 end
 
--- Name, rank text and status of trainer entry i, from either the multi-value or the table form.
+-- GetTrainerServiceInfo returns multiple values on some clients and a table on others.
 local function serviceInfo(i)
   local name, second, third = trainerCall("GetTrainerServiceInfo", i)
   if type(name) == "table" then
@@ -169,7 +133,7 @@ local function countUnlocked(unlocked)
 end
 
 function Scanner:ScanTrainer()
-  local db = char()
+  local db = UP.char
   local n = tonumber((trainerCall("GetNumTrainerServices"))) or 0
   local beast = isBeastTraining()
   local scan = { at = now(), services = n, beast = beast, matched = 0, learned = 0, unmatched = {}, unmatchedCount = 0 }
@@ -220,19 +184,15 @@ function Scanner:ScanTrainer()
 end
 
 function Scanner:IsUnlocked(skill, rank)
-  local db = char()
+  local db = UP.char
   local ranks = db and type(db.unlocked) == "table" and db.unlocked[skill]
   return type(ranks) == "table" and ranks[rank] == true
 end
 
 function Scanner:HasScanned()
-  local db = char()
+  local db = UP.char
   return db ~= nil and db.scannedAt ~= nil
 end
-
--- ---------------------------------------------------------------------------
--- Active pet
--- ---------------------------------------------------------------------------
 
 local function familyName(name, id)
   local families = UP.Families or {}
@@ -260,8 +220,8 @@ local function loyaltyLevel(text, total, level)
   end
 end
 
--- A key that stays the same across summons: the stable's petNumber, else name and family.
--- (A pet's GUID changes on every summon, so it isn't used.)
+-- Stable across summons (a pet's GUID changes on every summon): the stable's petNumber, else
+-- name and family.
 local function petKey(name, family)
   local list = call("C_StableInfo.GetActivePetList")
   if type(list) == "table" then
@@ -357,13 +317,9 @@ function Scanner:RequestPetRead()
   end
 end
 
--- ---------------------------------------------------------------------------
--- Planner context and debug output
--- ---------------------------------------------------------------------------
-
 function Scanner:Context()
   local pet = self.pet or {}
-  local db = char()
+  local db = UP.char
   local known = {}
   for k, v in pairs(pet.known or {}) do known[k] = v end
   return {
@@ -410,15 +366,11 @@ function Scanner:DebugDump()
   else
     lines[#lines + 1] = "trainer scan: none this session"
   end
-  local db = char()
+  local db = UP.char
   lines[#lines + 1] = "saved: " .. (db and type(db.unlocked) == "table" and countUnlocked(db.unlocked) or 0)
     .. " ranks unlocked, last scan " .. tostring(db and db.scannedAt or "never")
   return lines
 end
-
--- ---------------------------------------------------------------------------
--- Events
--- ---------------------------------------------------------------------------
 
 -- Not every client has every event; RegisterEvent errors on an unknown one.
 local function on(event, fn)
@@ -445,7 +397,7 @@ on("PLAYER_ENTERING_WORLD", function()
   request()
   if Scanner.nagShown then return end
   local _, class = call("UnitClass", "player")
-  local db = char()
+  local db = UP.char
   if class == "HUNTER" and db and db.scannedAt == nil then
     Scanner.nagShown = true
     UP:Print("Open your Beast Training window once so UltimatePet can see which ranks you know.")

@@ -13,7 +13,7 @@ globals = {
   SlashCmdList = { fields = { "ULTIMATEPET" } },
 }
 
--- WoW API the addon reads. Optional APIs (/upet debug) are looked up through _G by name.
+-- WoW API the addon reads directly. Optional APIs are reached through UP.lookup.
 read_globals = {
   "C_AddOns",
   "CreateFrame",
@@ -22,6 +22,7 @@ read_globals = {
   "GetBuildInfo",
   "GetRealmName",
   "UnitName", "UnitExists", "UnitCreatureFamily",
+  "time",
 }
 
 -- The WoW stub installs the fake client's globals; the specs poke at them.
@@ -39,6 +40,3 @@ files["tests/waypoints_spec.lua"] = {
   std = "+busted",
   globals = { "TomTom", "C_Map", "UiMapPoint", "C_SuperTrack" },
 }
-
--- Scanner.lua: WoW's time(); every other optional API is reached through UP.lookup.
-read_globals[#read_globals + 1] = "time"

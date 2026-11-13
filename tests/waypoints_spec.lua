@@ -4,15 +4,9 @@ local wow = dofile("tests/wowstub.lua")
 local function load()
   wow.reset()
   local ns = {}
-  for _, file in ipairs({ "Core.lua", "Data/Beasts.lua", "Waypoints.lua" }) do
-    assert(loadfile(file))("UltimatePet", ns)
-  end
+  for _, file in ipairs({ "Core.lua", "Data/Beasts.lua", "Waypoints.lua" }) do wow.run(file, ns) end
   return ns
 end
-
--- Optional client APIs this spec installs on the real _G (busted sandboxes plain global writes,
--- which the addon code would not see); cleared between tests.
-local OPTIONAL = { "TomTom", "C_Map", "UiMapPoint", "C_SuperTrack" }
 
 -- Real npcs from Data/Beasts.lua.
 local CUB = 7430      -- Frostsaber Cub, Winterspring (1452) 49.8, 9.6, L55-56
@@ -25,7 +19,7 @@ describe("Waypoints", function()
 
   local function installMap(opts)
     opts = opts or {}
-    _G.C_Map = {
+    wow.set("C_Map", {
       GetMapInfo = function(map)
         calls.mapInfo = map
         if map == 1452 then return { name = "Winterspring (loc)" } end
@@ -36,31 +30,28 @@ describe("Waypoints", function()
         calls.canMap = map
         return opts.can
       end or nil,
-    }
-    _G.UiMapPoint = {
+    })
+    wow.set("UiMapPoint", {
       CreateFromCoordinates = function(map, x, y) return { map = map, x = x, y = y } end,
-    }
+    })
   end
 
   before_each(function()
-    for _, name in ipairs(OPTIONAL) do _G[name] = nil end
     calls = {}
     UP = load()
     W = UP.Waypoints
   end)
 
-  after_each(function()
-    for _, name in ipairs(OPTIONAL) do _G[name] = nil end
-  end)
+  after_each(wow.restore)
 
   describe("with TomTom", function()
     before_each(function()
-      _G.TomTom = {
+      wow.set("TomTom", {
         AddWaypoint = function(self, map, x, y, opts)
           calls.tomtom = { self = self, map = map, x = x, y = y, opts = opts }
           return {}
         end,
-      }
+      })
       installMap()
     end)
 
@@ -105,7 +96,7 @@ describe("Waypoints", function()
 
     it("places the built-in map pin and super-tracks it", function()
       installMap()
-      _G.C_SuperTrack = { SetSuperTrackedUserWaypoint = function(v) calls.supertrack = v end }
+      wow.set("C_SuperTrack", { SetSuperTrackedUserWaypoint = function(v) calls.supertrack = v end })
       local ok, msg = W:Add(CUB, "Bite", 7)
       assert.is_true(ok)
       assert.are.same({ map = 1452, x = 49.8 / 100, y = 9.6 / 100 }, calls.pin)
@@ -149,7 +140,7 @@ describe("Waypoints", function()
 
   describe("beasts without coordinates", function()
     it("says which dungeon a beast is in, with or without TomTom", function()
-      _G.TomTom = { AddWaypoint = function() calls.tomtom = true end }
+      wow.set("TomTom", { AddWaypoint = function() calls.tomtom = true end })
       local ok, msg = W:Add(WORG, "Bite", 8)
       assert.is_false(ok)
       assert.is_nil(calls.tomtom)

@@ -1,21 +1,5 @@
 -- UltimatePet: Alerts.lua
--- Tells the hunter when a Beast Training rank is learned in the wild: a popup, a sound and a chat
--- line, each of which can be turned off.
---
--- Public API
---   Alerts:Report(skill, rank, name)  a learn was seen (rank and name optional); merged and filtered
---   Alerts:Test()                     shows a sample alert (Claw rank 2) without recording anything
---   Alerts:Settings()                 UP.db.global.alerts (defaults filled), or the defaults
---   Alerts:Set(key, on)               sets "popup", "sound" or "chat"
---   Alerts.Slash(rest)                handler for "/upet alerts ..."
---   Alerts.Pattern(format)            a game format string ("... %s.") as a Lua pattern capturing %s
---   Alerts.ParseChat(msg)             skill, rank (or nil), shown name for a learn chat line; nil otherwise
---
--- Detection: CHAT_MSG_SYSTEM against the client's ERR_LEARN_ABILITY_S / ERR_LEARN_SPELL_S, and
--- LEARNED_SPELL_IN_TAB / LEARNED_SPELL_IN_SKILL_LINE by spell id. Reports within MERGE_WINDOW are
--- merged; the same skill and rank is ignored for DUPLICATE_WINDOW. Only ranks whose source is
--- "tame" count, and nothing counts while a trainer window is open.
---
+-- Popup, sound and chat line when a Beast Training rank is learned from a beast.
 -- Approach credited to Huntsworn's AbilityLearned module (MIT); re-implemented.
 local _, UP = ...
 
@@ -26,31 +10,10 @@ local MERGE_WINDOW = 0.3
 local DUPLICATE_WINDOW = 5
 local FADE_IN, HOLD, FADE_OUT = 0.3, 4, 1
 local DEFAULTS = { popup = true, sound = true, chat = true }
-local KEYS = { "popup", "sound", "chat" }
 local LABELS = { popup = "Popup", sound = "Sound", chat = "Chat" }
 local GOLD = { 1, 0.82, 0 }
 
--- ---------------------------------------------------------------------------
--- Helpers
--- ---------------------------------------------------------------------------
-
-local function lookup(path)
-  local value = _G
-  for part in path:gmatch("[^%.]+") do
-    if type(value) ~= "table" then return nil end
-    value = value[part]
-  end
-  return value
-end
-
--- Calls a dotted global path under pcall; returns nothing if it is missing or errors.
-local function call(path, ...)
-  local fn = lookup(path)
-  if type(fn) ~= "function" then return end
-  local res = { pcall(fn, ...) }
-  if not res[1] then return end
-  return unpack(res, 2, table.maxn(res))
-end
+local lookup, call = UP.lookup, UP.call
 
 local function now()
   return tonumber((call("GetTime"))) or 0
@@ -66,10 +29,6 @@ local function readable(value)
   end
   return value
 end
-
--- ---------------------------------------------------------------------------
--- Settings
--- ---------------------------------------------------------------------------
 
 local function ensureDefaults()
   local global = UP.db and UP.db.global
@@ -91,10 +50,6 @@ function Alerts:Set(key, on)
   if s and DEFAULTS[key] ~= nil then s[key] = on and true or false end
 end
 
--- ---------------------------------------------------------------------------
--- Names and chat lines
--- ---------------------------------------------------------------------------
-
 -- A game format string as an anchored Lua pattern that captures each %s. Positional arguments
 -- (%1$s) become %s, and every other magic character is escaped.
 function Alerts.Pattern(format)
@@ -113,12 +68,10 @@ local function learnPatterns()
       list[#list + 1] = Alerts.Pattern(format)
     end
   end
-  -- Only cache once the client strings exist.
   if #list > 0 then patterns = list end
   return list
 end
 
--- Client spell name of a skill's rank 1, or nil while it can't be read.
 local function clientName(def)
   local r1 = def.ranks and def.ranks[1]
   local id = r1 and r1.spellId
@@ -148,19 +101,19 @@ local function nameIndex()
   end
 end
 
-function Alerts.SkillOfName(name)
+local function skillOfName(name)
   nameIndex()
   if type(name) ~= "string" then return nil end
   return byName[name] or byEnglish[name:lower()]
 end
 
--- The name the client uses for a skill (English if it can't be read).
 local function displayName(skill)
   nameIndex()
   return display[skill] or skill
 end
 
 -- skill, rank (nil when the rank couldn't be read), shown name for a learn chat line; nil otherwise.
+-- Matches the client's ERR_LEARN_ABILITY_S / ERR_LEARN_SPELL_S.
 function Alerts.ParseChat(msg)
   msg = readable(msg)
   if not msg then return nil end
@@ -169,7 +122,7 @@ function Alerts.ParseChat(msg)
     if ok and text then
       local base, inParens = text:match("^(.-)%s*%((.-)%)%s*$")
       local name = base and base ~= "" and base or text
-      local skill = Alerts.SkillOfName(name)
+      local skill = skillOfName(name)
       if skill then
         local def = UP.Skills[skill]
         local rank = inParens and tonumber(inParens:match("%d+"))
@@ -181,10 +134,6 @@ function Alerts.ParseChat(msg)
   end
   return nil
 end
-
--- ---------------------------------------------------------------------------
--- Detection
--- ---------------------------------------------------------------------------
 
 Alerts.trainerOpen = false
 
@@ -202,7 +151,7 @@ function Alerts:TrainerOpen()
   return true
 end
 
--- True when the rank (or, without a rank, any rank of the skill) is learned from a beast.
+-- Without a rank: whether any rank of the skill is learned from a beast.
 local function fromTaming(skill, rank)
   local def = UP.Skills and UP.Skills[skill]
   if not def then return false end
@@ -228,7 +177,7 @@ local function recent(key)
   return at ~= nil and now() - at < DUPLICATE_WINDOW
 end
 
--- Reports of a learn: merged for MERGE_WINDOW, then recorded and shown.
+-- Reports within MERGE_WINDOW are merged; the same skill and rank is ignored for DUPLICATE_WINDOW.
 function Alerts:Report(skill, rank, name)
   if not skill or self:TrainerOpen() then return false end
   if not fromTaming(skill, rank) then return false end
@@ -276,24 +225,6 @@ function Alerts:Flush()
   end
 end
 
--- Forgets merge and duplicate state (tests, /upet reset).
-function Alerts:ResetState()
-  pending, pendingOrder, flushScheduled, lastShown = {}, {}, false, {}
-  byName, byEnglish, display, complete = {}, {}, {}, false
-  patterns = nil
-  self.trainerOpen = false
-  self.queue = {}
-  if self.popup then
-    self.popup.current = nil
-    self.popup:Hide()
-  end
-end
-
--- ---------------------------------------------------------------------------
--- Notification
--- ---------------------------------------------------------------------------
-
--- "Claw (Rank 2)", or "Claw" without a rank.
 function Alerts.Title(learn)
   local name = learn.name or displayName(learn.skill)
   if learn.rank then return ("%s (Rank %d)"):format(name, learn.rank) end
@@ -365,24 +296,12 @@ function Alerts:Notify(learn)
   if s.chat then UP:Print("New pet ability: " .. title .. ".") end
 end
 
--- ---------------------------------------------------------------------------
--- Popup
--- ---------------------------------------------------------------------------
-
 Alerts.queue = {}
-
-local function create(kind, name, parent, template)
-  if template then
-    local ok, frame = pcall(CreateFrame, kind, name, parent, template)
-    if ok and frame then return frame end
-  end
-  return CreateFrame(kind, name, parent)
-end
 
 local function popupFrame()
   if Alerts.popup then return Alerts.popup end
   local parent = rawget(_G, "UIParent")
-  local f = create("Frame", "UltimatePetLearnAlert", parent)
+  local f = CreateFrame("Frame", "UltimatePetLearnAlert", parent)
   f:SetSize(420, 64)
   f:SetPoint("TOP", parent, "TOP", 0, -190)
   f:SetFrameStrata("HIGH")
@@ -438,7 +357,6 @@ local function present(f, item)
   f:Show()
 end
 
--- Advances the fade of the shown alert by `elapsed` seconds; shows the next queued one at the end.
 function Alerts:Step(f, elapsed)
   if not f.current then return end
   f.t = (f.t or 0) + elapsed
@@ -458,7 +376,7 @@ function Alerts:Step(f, elapsed)
   end
 end
 
--- Shows an alert ({ title, icon, build }), or queues it behind the one on screen.
+-- item: { title, icon, build }. Queued behind the alert on screen.
 function Alerts:ShowPopup(item)
   local f = popupFrame()
   if f.current then
@@ -468,10 +386,6 @@ function Alerts:ShowPopup(item)
   end
   return f
 end
-
--- ---------------------------------------------------------------------------
--- Test and slash command
--- ---------------------------------------------------------------------------
 
 function Alerts:Test()
   local s = self:Settings()
@@ -486,8 +400,7 @@ local function onOff(v) return v and "on" or "off" end
 
 local USAGE = "/upet alerts popup|sound|chat on|off, /upet alerts test"
 
-function Alerts.Slash(rest, ...)
-  if rest == Alerts then rest = ... end -- called as Alerts:Slash(rest)
+function Alerts.Slash(rest)
   local words = {}
   for word in tostring(rest or ""):lower():gmatch("%S+") do words[#words + 1] = word end
   if #words == 0 then
@@ -509,12 +422,6 @@ function Alerts.Slash(rest, ...)
   end
   UP:Print("Usage: " .. USAGE)
 end
-
-Alerts.KEYS = KEYS
-
--- ---------------------------------------------------------------------------
--- Events
--- ---------------------------------------------------------------------------
 
 local function on(event, fn)
   pcall(UP.On, UP, event, fn)
