@@ -315,8 +315,11 @@ local function buildFrame()
   return f
 end
 
-function PetPanel.TrainTooltip(skill, up, inCombat)
+function PetPanel.TrainTooltip(skill, up, inCombat, onLoad)
   local lines = { { format("%s (Rank %d) can be trained.", skill, up.rank), 1, 1, 1 } }
+  local r = UP.Skills[skill] and UP.Skills[skill].ranks[up.rank]
+  local description = r and UP.SpellText(r.spellId, onLoad)
+  if description then lines[#lines + 1] = { description, 1, 0.82, 0, true } end
   if up.delta == nil then
     lines[#lines + 1] = { "TP cost unknown.", 0.56, 0.64, 0.74 }
   elseif up.enough then
@@ -338,11 +341,19 @@ local function inCombat()
   return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
 end
 
-local function showTrainTooltip(owner, rm)
+local showTrainTooltip
+function showTrainTooltip(owner, rm)
   if not (GameTooltip and rm and rm.upgrade) then return end
   GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-  for i, l in ipairs(PetPanel.TrainTooltip(rm.skill, rm.upgrade, inCombat())) do
-    if i == 1 then GameTooltip:SetText(l[1], l[2], l[3], l[4]) else GameTooltip:AddLine(l[1], l[2], l[3], l[4]) end
+  local function reshow()
+    if GameTooltip:IsOwned(owner) then showTrainTooltip(owner, rm) end
+  end
+  for i, l in ipairs(PetPanel.TrainTooltip(rm.skill, rm.upgrade, inCombat(), reshow)) do
+    if i == 1 then
+      GameTooltip:SetText(l[1], l[2], l[3], l[4])
+    else
+      GameTooltip:AddLine(l[1], l[2], l[3], l[4], l[5])
+    end
   end
   GameTooltip:Show()
 end

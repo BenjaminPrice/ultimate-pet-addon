@@ -19,7 +19,8 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
    for a menu with **Skill planner** and **Pet view**.
 3. Pick a family and a preset, or tick **Use current pet** to plan for the pet you have out.
 4. Each chosen rank shows its status: Trained, Ready to Train, Unlocked (with what's missing),
-   Not Unlocked, Trainer (bought from a pet trainer) or No known source.
+   Not Unlocked, Trainer (bought from a pet trainer) or No known source. Hover a rank to see what
+   it does at that rank, as the game describes it.
 5. Click a **Not Unlocked** rank to list beasts that teach it, then **Waypoint** to mark one.
 6. Save builds, set one active for your current pet, or share them with Export and Import.
 7. The Pet tab of the character sheet (C) shows a panel with your pet's TP, its active build and

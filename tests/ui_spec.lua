@@ -280,6 +280,21 @@ describe("UI", function()
       assert.are.equal("Bite | Rank 8", GameTooltip.lines[1])
       assert.are.equal("Click to see beasts that teach this rank", GameTooltip.lines[#GameTooltip.lines])
     end)
+
+    it("adds the rank's spell text to the row tooltip once the client loads it", function()
+      local text = {}
+      local spells = rawget(_G, "C_Spell")
+      spells.GetSpellDescription = function(id) return text[id] end
+      spells.RequestLoadSpellData = function() end
+      UI:Show()
+      stub.fire(row("Bite"), "OnEnter")
+      GameTooltip:Show()
+      assert.are.equal("Requires pet level 56", GameTooltip.lines[2])
+      text[UP.Skills.Bite.ranks[8].spellId] = "Bite the enemy, causing 81 to 99 damage."
+      wow.fire("SPELL_DATA_LOAD_RESULT", UP.Skills.Bite.ranks[8].spellId, true)
+      assert.are.equal("Bite | Rank 8", GameTooltip.lines[1])
+      assert.are.equal("Bite the enemy, causing 81 to 99 damage.", GameTooltip.lines[2])
+    end)
   end)
 
   describe("with the verified Forever pet", function()
