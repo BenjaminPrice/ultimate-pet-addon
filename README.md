@@ -101,6 +101,10 @@ kept locally, not in the repo.
 It rewrites the three files and `tools/DATA_NOTES.md`, which lists every source conflict, unknown
 TP cost and beast without coordinates.
 
+To build a zip for sharing, run `python3 -I tools/package.py`. It writes
+`.release/UltimatePet-<version>.zip` with only the files the game loads, inside an `UltimatePet/`
+folder. Testers extract it into `Interface/AddOns/`.
+
 For in-game testing, enable Lua errors with `/console scriptErrors 1`, then run `/upet debug`.
 
 ## Credits and data sources
