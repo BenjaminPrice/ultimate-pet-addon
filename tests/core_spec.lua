@@ -19,11 +19,12 @@ describe("TOC", function()
     assert.are.equal("TomTom", meta.OptionalDeps)
   end)
 
-  it("loads Core first and every listed file registers its module", function()
+  it("loads the embedded libraries, then Core, and every listed file registers its module", function()
     local files = wow.readToc("UltimatePet.toc")
-    assert.are.equal("Core.lua", files[1])
+    assert.are.equal("Libs/embeds.xml", files[1])
+    assert.are.equal("Core.lua", files[2])
     local UP = wow.load()
-    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI",
+    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI", "Minimap",
                             "Families", "Skills", "Beasts", "Presets" }) do
       assert.is_table(UP[name], name)
     end
@@ -78,7 +79,8 @@ describe("Core", function()
         },
       } })
       wow.fire("ADDON_LOADED", "UltimatePet")
-      assert.are.equal(90, UltimatePetDB.global.minimap.angle)
+      assert.are.equal(90, UltimatePetDB.global.minimap.minimapPos)
+      assert.is_nil(UltimatePetDB.global.minimap.angle)
       assert.is_false(UltimatePetDB.global.minimap.hide)
       assert.is_true(UP.char.unlocked.Bite[3])
       assert.are.equal(123, UP.char.scannedAt)
@@ -158,18 +160,21 @@ describe("Core", function()
       assert.are.equal("UP1:Cat:60-6:Bi8", got)
     end)
 
-    it("shows help for no or an unknown subcommand", function()
+    it("opens the planner for no subcommand and shows help for an unknown one", function()
+      local toggled = 0
+      UP.UI = { Toggle = function() toggled = toggled + 1 end }
       wow.slash("/upet")
+      wow.slash("/upet show")
+      assert.are.equal(2, toggled)
+      wow.slash("/upet help")
       assert.matches("reset", joined(wow.takeChat()))
       wow.slash("/upet frobnicate")
       assert.matches("unknown command 'frobnicate'", joined(wow.takeChat()))
     end)
 
-    it("reports unimplemented commands", function()
-      for _, cmd in ipairs({ "show", "scan" }) do
-        wow.slash("/upet " .. cmd)
-        assert.matches("not implemented yet", joined(wow.takeChat()), nil, true)
-      end
+    it("reports no pet for scan", function()
+      wow.slash("/upet scan")
+      assert.matches("No pet summoned.", joined(wow.takeChat()), nil, true)
     end)
 
     it("lists APIs in debug, guarded against missing tables", function()

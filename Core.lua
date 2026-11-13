@@ -79,10 +79,10 @@ end
 -- SavedVariables
 -- ---------------------------------------------------------------------------
 
-UP.DB_VERSION = 1
+UP.DB_VERSION = 2
 
 local GLOBAL_DEFAULTS = {
-  minimap = { angle = 225, hide = false },
+  minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
   frame = {},
 }
 
@@ -114,6 +114,14 @@ UP.migrations = {
   [1] = function(db)
     if type(db.global) ~= "table" then db.global = nil end
     if type(db.chars) ~= "table" then db.chars = nil end
+  end,
+  -- LibDBIcon stores the button position as minimapPos.
+  [2] = function(db)
+    local mm = type(db.global) == "table" and db.global.minimap
+    if type(mm) == "table" and mm.angle ~= nil then
+      if mm.minimapPos == nil then mm.minimapPos = mm.angle end
+      mm.angle = nil
+    end
   end,
 }
 
@@ -229,8 +237,9 @@ local function notImplemented(cmd)
 end
 
 local HELP = {
-  "show - open the planner",
-  "scan - rescan the active pet",
+  "show - open the planner (also /upet on its own)",
+  "scan - read the active pet again",
+  "minimap - show or hide the minimap button",
   "debug - list the game APIs this client provides",
   "export - print the current build string",
   "import <string> - load a build string",
@@ -245,8 +254,22 @@ UP.commands = {
       UP:Print("  " .. line)
     end
   end,
-  show = function() notImplemented("show") end,
-  scan = function() notImplemented("scan") end,
+  show = function()
+    if UP.UI and UP.UI.Toggle then UP.UI:Toggle() else notImplemented("show") end
+  end,
+  scan = function()
+    if not (UP.Scanner and UP.Scanner.ReadPet) then return notImplemented("scan") end
+    local pet = UP.Scanner:ReadPet()
+    if not (pet and pet.exists) then
+      UP:Print("No pet summoned.")
+    else
+      UP:Print(("%s: %s, level %s, %s TP total, %s used."):format(tostring(pet.name), tostring(pet.family),
+        tostring(pet.level), tostring(pet.tpTotal), tostring(pet.tpUsed)))
+    end
+  end,
+  minimap = function()
+    if UP.Minimap and UP.Minimap.Toggle then UP.Minimap:Toggle() else notImplemented("minimap") end
+  end,
   export = function()
     UP:Print(UP.Serializer.Encode(UP:CurrentBuild()))
   end,
@@ -294,13 +317,32 @@ UP.commands = {
     else
       UP:Print("no pet summoned; summon one and run /upet debug again for pet values.")
     end
+    if UP.Scanner and UP.Scanner.DebugDump then
+      local ok, lines = pcall(UP.Scanner.DebugDump, UP.Scanner)
+      if ok and type(lines) == "table" then
+        for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
+      end
+    end
+    -- Raw trainer costs for a few ranks, to find which GetTrainerServiceCost return is TP.
+    local shown = 0
+    for skill, ranks in pairs(UP.char and UP.char.craftCosts or {}) do
+      for rank, entry in pairs(ranks) do
+        if shown < 5 and type(entry) == "table" then
+          local costs = {}
+          for i = 1, (entry.costs and entry.costs.n or 0) do costs[#costs + 1] = tostring(entry.costs[i]) end
+          UP:Print(("  cost %s %d: level %s, returns {%s}"):format(skill, rank, tostring(entry.level),
+            table.concat(costs, ", ")))
+          shown = shown + 1
+        end
+      end
+    end
   end,
 }
 
 function UP:HandleSlash(input)
   local cmd, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
   cmd = cmd:lower()
-  if cmd == "" then cmd = "help" end
+  if cmd == "" then cmd = "show" end
   local fn = UP.commands[cmd]
   if fn then
     fn(rest)

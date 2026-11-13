@@ -108,8 +108,11 @@ function wow.load(opts)
   wow.reset(opts)
   local ns = {}
   for _, file in ipairs(files) do
-    local chunk = assert(loadfile(root .. "/" .. file))
-    chunk(ADDON, ns)
+    -- XML files only embed third-party libraries (Libs/embeds.xml); tests stub those instead.
+    if not file:match("%.xml$") then
+      local chunk = assert(loadfile(root .. "/" .. file))
+      chunk(ADDON, ns)
+    end
   end
   wow.ns = ns
   return ns
