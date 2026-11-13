@@ -1,0 +1,20 @@
+# Packaged releases
+*.zip
+.release/
+
+# Local Lua toolchains (leafo actions / luarocks --local trees)
+.lua/
+.luarocks/
+.install/
+luacov.*.out
+
+# Editor and scratch files
+.vscode/
+*.swp
+*~
+.DS_Store
+scratch/
+*.tmp
+
+# Python bytecode (tools/)
+__pycache__/

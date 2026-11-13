@@ -1,0 +1,8 @@
+-- busted settings: run `busted` from the repository root.
+return {
+  default = {
+    ROOT = { "tests" },
+    pattern = "_spec",
+    verbose = true,
+  },
+}

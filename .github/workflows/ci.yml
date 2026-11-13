@@ -1,0 +1,29 @@
+# Lint and tests on every push and pull request.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: leafo/gh-actions-lua@v13
+        with:
+          luaVersion: "5.1.5"
+      - uses: leafo/gh-actions-luarocks@v6
+      - name: Install luacheck and busted
+        run: |
+          luarocks install luacheck 1.2.0
+          luarocks install busted 2.2.0
+      - name: Lint
+        run: luacheck .
+      - name: Tests
+        run: busted
+      - name: Load smoke test
+        run: lua tests/smoke.lua
