@@ -42,8 +42,10 @@ local function openPetView()
 end
 
 -- Menu callbacks run inside the game's menu code, which can hide errors; print them instead.
-local function safe(func)
+local function safe(text, func)
   return function()
+    Minimap.picks = Minimap.picks or {}
+    table.insert(Minimap.picks, text)
     local ok, err = pcall(func)
     if not ok then UP:Print("Menu error: " .. tostring(err)) end
   end
@@ -51,8 +53,8 @@ end
 
 -- Entries of the right-click menu, in order.
 Minimap.MENU = {
-  { text = "Skill planner", func = safe(openPlanner) },
-  { text = "Pet view", func = safe(openPetView) },
+  { text = "Skill planner", func = safe("Skill planner", openPlanner) },
+  { text = "Pet view", func = safe("Pet view", openPetView) },
 }
 
 -- Older clients without MenuUtil: a UIDropDownMenu at the cursor.
@@ -80,14 +82,23 @@ end
 function Minimap:OpenMenu(owner)
   local menuUtil = rawget(_G, "MenuUtil")
   if menuUtil and menuUtil.CreateContextMenu then
+    self.menuKind = "MenuUtil"
     return menuUtil.CreateContextMenu(owner, function(_, root)
       root:CreateTitle(NAME)
       for _, item in ipairs(Minimap.MENU) do root:CreateButton(item.text, item.func) end
     end)
   end
   if rawget(_G, "UIDropDownMenu_Initialize") and rawget(_G, "ToggleDropDownMenu") then
+    self.menuKind = "UIDropDownMenu"
     return legacyMenu()
   end
+  self.menuKind = "none"
+end
+
+-- Lines for /upet debug: which menu the client used and which entries were picked.
+function Minimap:DebugDump()
+  return { ("minimap menu: %s, picked: %s"):format(tostring(self.menuKind),
+    self.picks and table.concat(self.picks, ", ") or "nothing") }
 end
 
 -- Left-click opens or closes the planner; right-click shows the menu.

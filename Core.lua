@@ -346,12 +346,15 @@ UP.commands = {
         for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
       end
     end
-    if UP.PetPanel and UP.PetPanel.DebugDump then
-      local ok, lines = pcall(UP.PetPanel.DebugDump, UP.PetPanel)
-      if ok and type(lines) == "table" then
-        for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
-      elseif not ok then
-        UP:Print("  pet panel debug failed: " .. tostring(lines))
+    for _, mod in ipairs({ "PetPanel", "Minimap" }) do
+      local m = UP[mod]
+      if m and m.DebugDump then
+        local ok, lines = pcall(m.DebugDump, m)
+        if ok and type(lines) == "table" then
+          for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
+        elseif not ok then
+          UP:Print("  " .. mod .. " debug failed: " .. tostring(lines))
+        end
       end
     end
     -- Raw trainer costs for a few ranks, to find which GetTrainerServiceCost return is TP.
