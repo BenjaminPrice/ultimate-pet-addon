@@ -6,6 +6,7 @@
 --   UI.RowModel(skill, rank, ctx)      what one skill row shows (label, colours, tp text, clickable)
 --   UI.TooltipLines(skill, rank, ctx)  the row tooltip as a list of lines
 --   UI.PopoverModel(skill, rank)       the beast list for a locked rank
+--   UI.StatusColor(code), UI.SkillIcon(skill, rank)   shared with the pet panel
 --   UI.State()                         the build plus the derived level, budget, costs and Planner ctx
 -- The action methods (SaveBuild, Import, StepRank, ...) are what the buttons call; the specs call them too.
 --
@@ -272,6 +273,19 @@ function UI.SkillLists(family)
   return actives, passives
 end
 
+-- The colour for a Planner.Status code (grey for an unknown code).
+function UI.StatusColor(code)
+  return COLORS[CODE_COLOR[code or ""]] or COLORS.GREY
+end
+
+-- The game icon for a rank of a skill, else the bundled icon path.
+function UI.SkillIcon(skill, rank)
+  local def = UP.Skills[skill]
+  if not def then return nil end
+  local r = def.ranks[math.max(1, math.min(tonumber(rank) or 1, #def.ranks))]
+  return spellTexture(r and r.spellId) or def.icon
+end
+
 -- What a row shows for `skill` at the chosen `rank` (0 = not taken) under the Planner ctx.
 function UI.RowModel(skill, rank, ctx)
   local def = UP.Skills[skill]
@@ -301,7 +315,7 @@ function UI.RowModel(skill, rank, ctx)
   local st = UP.Planner.Status(skill, rank, ctx)
   m.status, m.code = st, st.code
   m.label = UI.StatusLabel(st)
-  m.color = COLORS[CODE_COLOR[st.code]] or COLORS.GREY
+  m.color = UI.StatusColor(st.code)
   m.clickable = st.code == "LOCKED" or st.code == "NO_SOURCE"
   -- U+00BB: the mock's U+25B8 arrow isn't in the game fonts.
   if st.code == "LOCKED" then m.hint = " \194\187 beasts" end

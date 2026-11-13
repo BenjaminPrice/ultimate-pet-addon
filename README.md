@@ -21,6 +21,8 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
    Not Unlocked, Trainer (bought from a pet trainer) or No known source.
 5. Click a **Not Unlocked** rank to list beasts that teach it, then **Waypoint** to mark one.
 6. Save builds, set one active for your current pet, or share them with Export and Import.
+7. The Pet tab of the character sheet (C) shows a panel with your pet's TP, its active build and
+   the ranks it knows against that build. `/upet pet` opens the same panel on its own.
 
 ## Install
 
@@ -47,6 +49,7 @@ collectors such as EllesmereUI's minimap module and broker bars such as Titan Pa
 |---|---|
 | (none) or `show` | Open or close the planner window |
 | `scan` | Read the active pet again and print its family, level and TP |
+| `pet` | Show or hide the current pet panel as a separate window |
 | `minimap` | Show or hide the minimap button |
 | `debug` | Print the client build, which game APIs exist, the pet and scanner state (paste it into bug reports) |
 | `export` | Print the current build as a shareable string |

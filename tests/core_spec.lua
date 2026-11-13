@@ -24,7 +24,7 @@ describe("TOC", function()
     assert.are.equal("Libs/embeds.xml", files[1])
     assert.are.equal("Core.lua", files[2])
     local UP = wow.load()
-    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI", "Minimap",
+    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI", "PetPanel", "Minimap",
                             "Families", "Skills", "Beasts", "Presets" }) do
       assert.is_table(UP[name], name)
     end

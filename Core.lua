@@ -84,6 +84,7 @@ UP.DB_VERSION = 2
 local GLOBAL_DEFAULTS = {
   minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
   frame = {},
+  petPanel = {}, -- floating pet panel position
 }
 
 local CHAR_DEFAULTS = {
@@ -206,7 +207,7 @@ UP.DEBUG_APIS = {
   "Enum.SpellBookSpellBank", "C_Spell.GetSpellTexture", "C_Spell.GetSpellSubtext", "GetSpellTexture",
   -- Maps, UI, waypoints
   "C_Map.GetMapInfo", "C_Map.SetUserWaypoint", "UiMapPoint.CreateFromCoordinates",
-  "C_Timer.After", "UIDropDownMenu_Initialize",
+  "C_Timer.After", "UIDropDownMenu_Initialize", "PetPaperDollFrame", "CharacterFrame",
   "TomTom.AddWaypoint",
 }
 
@@ -239,6 +240,7 @@ end
 local HELP = {
   "show - open the planner (also /upet on its own)",
   "scan - read the active pet again",
+  "pet - show the current pet panel",
   "minimap - show or hide the minimap button",
   "debug - list the game APIs this client provides",
   "export - print the current build string",
@@ -266,6 +268,9 @@ UP.commands = {
       UP:Print(("%s: %s, level %s, %s TP total, %s used."):format(tostring(pet.name), tostring(pet.family),
         tostring(pet.level), tostring(pet.tpTotal), tostring(pet.tpUsed)))
     end
+  end,
+  pet = function()
+    if UP.PetPanel and UP.PetPanel.Toggle then UP.PetPanel:Toggle() else notImplemented("pet") end
   end,
   minimap = function()
     if UP.Minimap and UP.Minimap.Toggle then UP.Minimap:Toggle() else notImplemented("minimap") end
