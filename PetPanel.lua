@@ -231,11 +231,15 @@ local function savePosition(f)
   end
 end
 
+-- The saved spot if the panel was dragged, else beside the planner when it's open, else centre.
 local function placeFloating(f)
   local pos = UP.db and UP.db.global and UP.db.global.petPanel
+  local planner = UP.UI and UP.UI.frame
   f:ClearAllPoints()
   if type(pos) == "table" and pos.point then
     f:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x or 0, pos.y or 0)
+  elseif planner and planner:IsShown() then
+    f:SetPoint("TOPLEFT", planner, "TOPRIGHT", 4, 0)
   else
     f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   end
@@ -512,6 +516,7 @@ end
 function PetPanel:ShowAttached()
   local f = self:Create()
   self.mode = "attached"
+  f:SetFrameStrata("MEDIUM")
   placeAttached(f)
   f.close:Hide()
   if f:IsShown() then self:Refresh() else f:Show() end
@@ -521,9 +526,12 @@ end
 function PetPanel:ShowFloating()
   local f = self:Create()
   self.mode = "floating"
+  -- Same strata as the planner, raised, so the planner window never covers it.
+  f:SetFrameStrata("HIGH")
   placeFloating(f)
   f.close:Show()
   if f:IsShown() then self:Refresh() else f:Show() end
+  if f.Raise then f:Raise() end
 end
 
 function PetPanel:Hide()

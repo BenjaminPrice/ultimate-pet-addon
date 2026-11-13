@@ -233,6 +233,19 @@ describe("PetPanel", function()
   end)
 
   describe("floating", function()
+    it("opens beside the planner and in front of it from the Pet view button", function()
+      setPet(FANG)
+      local strata
+      UP.UI:Toggle()
+      local f = PetPanel:Create()
+      f.SetFrameStrata = function(_, value) strata = value end
+      UP.UI.w.petViewButton:Click()
+      assert.is_true(f:IsShown())
+      assert.are.equal("floating", PetPanel.mode)
+      assert.are.equal("HIGH", strata)
+      assert.are.same({ "TOPLEFT", UP.UI.frame, "TOPRIGHT", 4, 0 }, f.points[1])
+    end)
+
     it("toggles with /upet pet, closes with Escape and remembers its position", function()
       setPet(FANG)
       wow.slash("/upet pet")
