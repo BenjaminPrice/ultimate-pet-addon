@@ -18,3 +18,4 @@ scratch/
 
 # Python bytecode (tools/)
 __pycache__/
+luac.out
