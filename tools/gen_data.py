@@ -47,7 +47,7 @@ NEW_IN_FOREVER = [
     "Sonic Blast", "Swipe", "Mine!", "Demoralizing Screech", "Pinch", "Dismember", "Tendon Rip",
     "Savage Rend", "Web", "Dust Cloud", "Trickster's Dance", "Lava Breath",
 ]
-# Two-letter export codes. The first block matches the approved UI mock.
+# Two-letter export codes.
 SKILL_CODES = {
     "Bite": "Bi", "Claw": "Cl", "Dash": "Da", "Prowl": "Pr", "Growl": "Gr", "Cower": "Co",
     "Swipe": "Sw", "Dive": "Dv", "Mine!": "Mi", "Lava Breath": "LB",

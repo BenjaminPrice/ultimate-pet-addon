@@ -1,5 +1,4 @@
--- UltimatePet: Serializer.lua
--- Build string encode/decode. Format: UP1:<FamilyNoSpaces>:<level>-<loyalty>:<Code><rank>,...
+-- Build strings: UP1:<FamilyNoSpaces>:<level>-<loyalty>:<Code><rank>,...
 -- e.g. UP1:Cat:60-6:Bi8,Cl8,Da3,Gr7,GS9,NA7. Codes come from UP.SkillCodes; skills are written in
 -- UP.SkillOrder order.
 local _, UP = ...
@@ -14,7 +13,6 @@ local function familyToken(family)
   return (family:gsub("%s", ""))
 end
 
--- Encodes a build as a build string.
 function Serializer.Encode(build)
   local parts = {}
   for _, skill in ipairs(UP.SkillOrder) do

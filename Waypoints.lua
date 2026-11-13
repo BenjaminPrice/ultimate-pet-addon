@@ -1,30 +1,12 @@
--- UltimatePet: Waypoints.lua
 -- Points the player at a teaching beast: a TomTom waypoint when TomTom is loaded, else the
--- built-in map pin, else the coordinates in chat. Every game API is optional and pcall-guarded.
+-- built-in map pin, else the coordinates in chat.
 local _, UP = ...
 
 local Waypoints = UP.Waypoints or {}
 UP.Waypoints = Waypoints
 
 local format = string.format
-
--- Looks up a dotted global path ("C_Map.GetMapInfo") without erroring on missing tables.
-local function lookup(path)
-  local value = _G
-  for part in path:gmatch("[^%.]+") do
-    if type(value) ~= "table" then return nil end
-    value = value[part]
-  end
-  return value
-end
-
--- Calls the function at a dotted global path. Returns ok, results...; ok is false when the
--- function is missing or raised an error.
-local function call(path, ...)
-  local fn = lookup(path)
-  if type(fn) ~= "function" then return false end
-  return pcall(fn, ...)
-end
+local lookup, call = UP.lookup, UP.call
 
 local function npc(npcId)
   local beasts = UP.Beasts and UP.Beasts.npcs
@@ -35,7 +17,7 @@ local function hasCoords(info)
   return type(info.map) == "number" and type(info.x) == "number" and type(info.y) == "number"
 end
 
----"L57-59", or "L50" when the range is a single level.
+-- "L57-59", or "L50" when the range is a single level.
 local function levels(info)
   local min, max = info.min, info.max
   if not min then return max and ("L" .. max) or "" end
@@ -43,11 +25,10 @@ local function levels(info)
   return format("L%d-%d", min, max)
 end
 
----Localised zone name for the npc's map, falling back to the stored English name.
 local function zoneName(info)
   if info.map then
-    local ok, mapInfo = call("C_Map.GetMapInfo", info.map)
-    if ok and type(mapInfo) == "table" and type(mapInfo.name) == "string" and mapInfo.name ~= "" then
+    local mapInfo = call("C_Map.GetMapInfo", info.map)
+    if type(mapInfo) == "table" and type(mapInfo.name) == "string" and mapInfo.name ~= "" then
       return mapInfo.name
     end
   end
@@ -62,7 +43,6 @@ function Waypoints:HasTomTom()
   return type(lookup("TomTom.AddWaypoint")) == "function"
 end
 
--- TomTom:AddWaypoint(map, x, y, opts). Returns true when the call didn't error.
 local function addTomTom(info, title)
   local tomtom = lookup("TomTom")
   local ok = pcall(tomtom.AddWaypoint, tomtom, info.map, info.x / 100, info.y / 100, {
@@ -77,20 +57,21 @@ end
 
 -- Built-in map pin plus super-tracking where available. Returns true when the pin was placed.
 local function addMapPin(info)
-  if type(lookup("C_Map.SetUserWaypoint")) ~= "function" then return false end
-  if type(lookup("C_Map.CanSetUserWaypointOnMap")) == "function" then
-    local ok, can = call("C_Map.CanSetUserWaypointOnMap", info.map)
-    if not ok or not can then return false end
+  local setWaypoint = lookup("C_Map.SetUserWaypoint")
+  if type(setWaypoint) ~= "function" then return false end
+  if type(lookup("C_Map.CanSetUserWaypointOnMap")) == "function"
+    and not call("C_Map.CanSetUserWaypointOnMap", info.map) then
+    return false
   end
-  local ok, point = call("UiMapPoint.CreateFromCoordinates", info.map, info.x / 100, info.y / 100)
-  if not ok or point == nil then return false end
-  if not call("C_Map.SetUserWaypoint", point) then return false end
+  local point = call("UiMapPoint.CreateFromCoordinates", info.map, info.x / 100, info.y / 100)
+  if point == nil then return false end
+  if not pcall(setWaypoint, point) then return false end
   call("C_SuperTrack.SetSuperTrackedUserWaypoint", true)
   return true
 end
 
----Sets a waypoint to a teaching beast and reports it in chat.
----Returns ok (a waypoint or pin was placed) and the message printed.
+-- Sets a waypoint to a teaching beast and reports it in chat.
+-- Returns ok (a waypoint or pin was placed) and the message printed.
 function Waypoints:Add(npcId, skill, rank)
   local info = npc(npcId)
   local msg
@@ -134,7 +115,7 @@ function Waypoints:Add(npcId, skill, rank)
   return false, where
 end
 
----One plain line for UI lists: "Name  L57-59  Winterspring 63.2, 58.1 (Rare)".
+-- One line for UI lists: "Name  L57-59  Winterspring 63.2, 58.1 (Rare)".
 function Waypoints:Describe(npcId)
   local info = npc(npcId)
   if not info then return format("Unknown beast %s", tostring(npcId)) end

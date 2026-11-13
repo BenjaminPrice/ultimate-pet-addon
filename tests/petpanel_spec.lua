@@ -2,21 +2,14 @@ local wow = dofile("tests/wowstub.lua")
 local stub = dofile("tests/uistub.lua")
 local plain = stub.plain
 
--- The verified Forever pet: L10 Rebellious Wolf 'Fang', 0 TP total / 4 used, petNumber 7.
+-- A real Forever pet, as Scanner:ReadPet() reports it.
 local FANG = {
   exists = true, name = "Fang", family = "Wolf", familyId = 1, familyKnown = true, level = 10,
   loyalty = 1, loyaltyName = "Rebellious", tpTotal = 0, tpUsed = 4, unspent = -4,
   known = { Bite = 2, Growl = 1, ["Great Stamina"] = 1, ["Natural Armor"] = 1 }, key = 7,
 }
 
-local BLIZZARD = { "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "UltimatePetPetPanel" }
-
-local function copy(t)
-  if type(t) ~= "table" then return t end
-  local out = {}
-  for k, v in pairs(t) do out[k] = copy(v) end
-  return out
-end
+local copy = wow.copy
 
 local function hex(c)
   local function byte(v) return math.floor(v * 255 + 0.5) end
@@ -26,12 +19,8 @@ end
 describe("PetPanel", function()
   local UP, PetPanel, C
 
-  local function setPet(p)
-    UP.Scanner.pet = p and copy(p) or { exists = false, known = {} }
-    UP:Fire("STATE_CHANGED")
-  end
+  local function setPet(p) wow.setPet(UP, p) end
 
-  -- A stand-in Blizzard frame, hidden, that records HookScript calls.
   local function blizzardFrame(name)
     local f = CreateFrame("Frame", name, rawget(_G, "UIParent"))
     f:Hide()
@@ -74,7 +63,7 @@ describe("PetPanel", function()
 
   after_each(function()
     stub.uninstall()
-    for _, name in ipairs(BLIZZARD) do rawset(_G, name, nil) end
+    wow.restore()
   end)
 
   describe("Model", function()
@@ -170,7 +159,6 @@ describe("PetPanel", function()
       assert.are.equal("Fang - Wolf, level 10", plain(f.lines[1].text))
       assert.is_false(f.close:IsShown())
 
-      -- Refreshes on STATE_CHANGED while shown.
       local p = copy(FANG)
       p.level = 11
       setPet(p)
@@ -184,7 +172,6 @@ describe("PetPanel", function()
       petTab:Hide()
       assert.is_false(f:IsShown())
 
-      -- Hooks only once.
       wow.fire("PLAYER_LOGIN")
       assert.are.equal(2, #petTab.hooks)
     end)
@@ -233,6 +220,19 @@ describe("PetPanel", function()
   end)
 
   describe("floating", function()
+    it("opens beside the planner and in front of it from the Pet view button", function()
+      setPet(FANG)
+      local strata
+      UP.UI:Toggle()
+      local f = PetPanel:Create()
+      f.SetFrameStrata = function(_, value) strata = value end
+      UP.UI.w.petViewButton:Click()
+      assert.is_true(f:IsShown())
+      assert.are.equal("floating", PetPanel.mode)
+      assert.are.equal("HIGH", strata)
+      assert.are.same({ "TOPLEFT", UP.UI.frame, "TOPRIGHT", 4, 0 }, f.points[1])
+    end)
+
     it("toggles with /upet pet, closes with Escape and remembers its position", function()
       setPet(FANG)
       wow.slash("/upet pet")
@@ -352,13 +352,11 @@ describe("PetPanel", function()
       assert.is_truthy(b)
       assert.is_true(b:IsShown())
 
-      -- Combat hides it, and hovering in combat doesn't show it.
       wow.fire("PLAYER_REGEN_DISABLED")
       assert.is_false(b:IsShown())
-      _G.InCombatLockdown = function() return true end
+      wow.set("InCombatLockdown", function() return true end)
       growl.train:GetScript("OnEnter")(growl.train)
       assert.is_false(b:IsShown())
-      _G.InCombatLockdown = nil
     end)
   end)
 end)

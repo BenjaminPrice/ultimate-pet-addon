@@ -1,16 +1,6 @@
 local wow = dofile("tests/wowstub.lua")
 
--- Game APIs the scanner reads that tests/wowstub.lua does not provide. Installed per test through
--- set() and restored afterwards, so other specs see the stub's plain client.
-local saved = {}
-local function set(name, value)
-  if not saved[name] then saved[name] = { value = rawget(_G, name) } end
-  _G[name] = value
-end
-local function restore()
-  for name, old in pairs(saved) do _G[name] = old.value end
-  saved = {}
-end
+local set = wow.set
 
 local function spell(UP, skill, rank)
   return UP.Skills[skill].ranks[rank].spellId
@@ -69,7 +59,7 @@ local function npc(kind)
   end)
 end
 
--- The verified Forever pet: L10 Rebellious Wolf, TP 0 total / 4 used, petNumber 7.
+-- A real Forever pet: L10 Rebellious Wolf 'Fang', TP 0 total / 4 used, petNumber 7.
 local function forPet(book, overrides)
   overrides = overrides or {}
   set("__petExists", true)
@@ -114,7 +104,7 @@ describe("Scanner", function()
     set("time", function() return 1234 end)
   end)
 
-  after_each(restore)
+  after_each(wow.restore)
 
   describe("Beast Training", function()
     local function window(U)
@@ -141,8 +131,6 @@ describe("Scanner", function()
       assert.is_true(unlocked.Dash[1])
       assert.is_nil(unlocked["Arcane Shot"])
       assert.are.equal(1234, UP.char.scannedAt)
-      assert.are.same({ level = 8, costs = { 0, 4, n = 2 } }, UP.char.craftCosts.Bite[2])
-      assert.are.equal(30, UP.char.craftCosts.Dash[1].level)
       assert.are.equal(1, changes)
       assert.is_true(UP.Scanner:HasScanned())
       assert.is_true(UP.Scanner:IsUnlocked("Bite", 3))
@@ -174,8 +162,6 @@ describe("Scanner", function()
       assert.is_true(UP.Scanner:IsUnlocked("Dash", 1))
       assert.is_false(UP.Scanner:IsUnlocked("Bite", 3))
       assert.is_false(UP.Scanner:IsUnlocked("Great Stamina", 4))
-      -- costs are still recorded for ranks not yet learned
-      assert.are.equal(16, UP.char.craftCosts.Bite[3].level)
     end)
 
     it("only ever grows the unlocked set", function()

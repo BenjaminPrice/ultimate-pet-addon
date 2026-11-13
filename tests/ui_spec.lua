@@ -3,33 +3,20 @@ local wow = dofile("tests/wowstub.lua")
 local stub = dofile("tests/uistub.lua")
 local plain = stub.plain
 
--- The verified Forever pet: L10 Rebellious Wolf 'Fang', 0 TP total / 4 used, petNumber 7.
+-- A real Forever pet, as Scanner:ReadPet() reports it.
 local FANG = {
   exists = true, name = "Fang", family = "Wolf", familyId = 1, familyKnown = true, level = 10,
   loyalty = 1, loyaltyName = "Rebellious", tpTotal = 0, tpUsed = 4, unspent = -4,
   known = { Bite = 2, Growl = 2 }, key = 7,
 }
 
-local function copy(t)
-  if type(t) ~= "table" then return t end
-  local out = {}
-  for k, v in pairs(t) do out[k] = copy(v) end
-  return out
-end
-
-local function chatText()
-  return table.concat(wow.takeChat(), "\n")
-end
+local chatText = wow.chatText
 
 describe("UI", function()
   local UP, UI
 
-  local function setPet(p)
-    UP.Scanner.pet = p and copy(p) or { exists = false, known = {} }
-    UP:Fire("STATE_CHANGED")
-  end
+  local function setPet(p) wow.setPet(UP, p) end
 
-  -- The row frame showing `skill`, searching both columns.
   local function row(skill)
     for _, col in ipairs(UI.w.cols) do
       for _, r in ipairs(col.pool) do
@@ -179,6 +166,14 @@ describe("UI", function()
       assert.is_true(UI.frame:IsShown())
     end)
 
+    it("opens the pet view from the Pet view button", function()
+      UI:Toggle()
+      local toggled = 0
+      UP.PetPanel.Toggle = function() toggled = toggled + 1 end
+      UI.w.petViewButton:Click()
+      assert.are.equal(1, toggled)
+    end)
+
     it("builds with every template missing (plain fallbacks)", function()
       stub.uninstall()
       load({ ui = { missing = { all = true, UIDropDownMenu = true } } })
@@ -318,7 +313,6 @@ describe("UI", function()
       assert.are.equal("Lv 56", row("Bite").level:GetText())
       UP.UI:StepRank("Bite", -6)
       assert.are.equal("Trained", plain(row("Bite").status:GetText()))
-      -- Unticking returns to the sliders.
       UI.w.useCheck:SetChecked(false)
       UI.w.useCheck:Click()
       assert.is_true(UI.w.levelSlider:IsEnabled())

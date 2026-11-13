@@ -1,5 +1,3 @@
--- UltimatePet: Core.lua
--- Namespace, event dispatcher, SavedVariables defaults and migrations, slash commands.
 local addonName, UP = ...
 
 UP.name = addonName
@@ -11,9 +9,25 @@ end
 
 UP.version = metadata("Version") or "dev"
 
--- ---------------------------------------------------------------------------
--- Output
--- ---------------------------------------------------------------------------
+-- Resolves a dotted global path ("C_Map.GetMapInfo"), returning nil when any part is missing.
+function UP.lookup(path)
+  local value = _G
+  for part in path:gmatch("[^%.]+") do
+    if type(value) ~= "table" then return nil end
+    value = value[part]
+  end
+  return value
+end
+
+-- Calls the function at a dotted global path; returns nothing when it is missing or errors.
+function UP.call(path, ...)
+  local fn = UP.lookup(path)
+  if type(fn) ~= "function" then return end
+  local res = { pcall(fn, ...) }
+  if not res[1] then return end
+  return unpack(res, 2, table.maxn(res))
+end
+
 
 local PREFIX = "|cffabd473UltimatePet|r: "
 
@@ -30,13 +44,8 @@ function UP:Print(...)
   end
 end
 
--- ---------------------------------------------------------------------------
--- Events and internal messages
--- ---------------------------------------------------------------------------
--- UP:On(name, fn) subscribes fn(...) to a game event or an internal message. Game events are
--- registered on the shared frame; names in UP.MESSAGES are internal and only reach handlers through
--- UP:Fire(name, ...). Handlers receive the event's arguments, not the event name.
-
+-- UP:On(name, fn) subscribes to a game event or, for names in UP.MESSAGES, an internal message
+-- sent with UP:Fire. Handlers receive the arguments without the event name.
 UP.MESSAGES = {
   STATE_CHANGED = true, -- scanned data, the active pet or the DB changed; the UI refreshes
 }
@@ -75,11 +84,8 @@ function UP:Fire(name, ...)
   dispatch(name, ...)
 end
 
--- ---------------------------------------------------------------------------
--- SavedVariables
--- ---------------------------------------------------------------------------
 
-UP.DB_VERSION = 2
+UP.DB_VERSION = 3
 
 local GLOBAL_DEFAULTS = {
   minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
@@ -90,7 +96,6 @@ local GLOBAL_DEFAULTS = {
 
 local CHAR_DEFAULTS = {
   unlocked = {},   -- [skill][rank] = true, from the Beast Training window
-  craftCosts = {}, -- [skill][rank] = { tp =, level = }, live overrides of bundled data
   builds = {},     -- [name] = build table
   petBuild = {},   -- [petName .. "|" .. family] = build name
   -- scannedAt: time of the last Beast Training scan; nil until the first one
@@ -123,6 +128,11 @@ UP.migrations = {
     if type(mm) == "table" and mm.angle ~= nil then
       if mm.minimapPos == nil then mm.minimapPos = mm.angle end
       mm.angle = nil
+    end
+  end,
+  [3] = function(db)
+    for _, char in pairs(type(db.chars) == "table" and db.chars or {}) do
+      if type(char) == "table" then char.craftCosts = nil end
     end
   end,
 }
@@ -176,7 +186,6 @@ function UP:CurrentBuild()
   return UP.Planner.CopyBuild(UP.Planner.Preset(family))
 end
 
--- Stores build as this character's current build and tells the UI.
 function UP:SetCurrentBuild(build)
   UP.char.currentBuild = build
   UP:Fire("STATE_CHANGED")
@@ -189,52 +198,6 @@ UP:On("ADDON_LOADED", function(name)
   UP:Fire("STATE_CHANGED")
 end)
 
--- ---------------------------------------------------------------------------
--- Slash commands
--- ---------------------------------------------------------------------------
-
--- APIs the scanner, waypoints and UI rely on; `/upet debug` reports which exist on this client.
-UP.DEBUG_APIS = {
-  -- Beast Training is the class trainer window on Forever
-  "GetNumTrainerServices", "GetTrainerServiceInfo", "GetTrainerServiceItemLink", "GetTrainerServiceCost",
-  "GetTrainerServiceLevelReq", "C_Trainer", "C_TooltipInfo.GetTrainerService",
-  -- Classic craft API (missing on Forever 1.60)
-  "GetCraftInfo", "GetNumCrafts",
-  -- Pet state
-  "C_PetInfo.GetPetTrainingPoints", "C_PetInfo.GetPetLoyalty", "GetPetTrainingPoints", "GetPetLoyalty",
-  "UnitCreatureFamily", "C_StableInfo.GetActivePetList",
-  -- Pet spellbook and icons
-  "C_SpellBook.HasPetSpells", "C_SpellBook.GetSpellBookItemInfo", "C_SpellBook.GetSpellBookItemName",
-  "Enum.SpellBookSpellBank", "C_Spell.GetSpellTexture", "C_Spell.GetSpellSubtext", "GetSpellTexture",
-  -- Maps, UI, waypoints
-  "C_Map.GetMapInfo", "C_Map.SetUserWaypoint", "UiMapPoint.CreateFromCoordinates",
-  "C_Timer.After", "UIDropDownMenu_Initialize",
-  -- Character sheet: Classic Pet tab, or Forever's pet view inside the paper doll
-  "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "CharacterFrame.TitleContainer",
-  "TomTom.AddWaypoint",
-}
-
--- Calls a dotted global path and returns its results as one string, or nil if it's missing or errors.
-local function probe(path, ...)
-  local fn = UP.lookup(path)
-  if type(fn) ~= "function" then return nil end
-  local res = { pcall(fn, ...) }
-  if not res[1] then return "error: " .. tostring(res[2]) end
-  local out = {}
-  for i = 2, table.maxn(res) do out[#out + 1] = tostring(res[i]) end
-  return table.concat(out, ", ")
-end
-
--- Looks up a dotted global path ("C_Map.GetMapInfo") without erroring on missing tables.
-local function lookup(path)
-  local value = _G
-  for part in path:gmatch("[^%.]+") do
-    if type(value) ~= "table" then return nil end
-    value = value[part]
-  end
-  return value
-end
-UP.lookup = lookup
 
 local function notImplemented(cmd)
   UP:Print("'" .. cmd .. "' is not implemented yet.")
@@ -247,7 +210,7 @@ local HELP = {
   "alerts [popup|sound|chat on|off | test] - learned-ability alert settings",
   "options - open the options page",
   "minimap - show or hide the minimap button",
-  "debug - list the game APIs this client provides",
+  "debug - print the version and scanner state for bug reports",
   "export - print the current build string",
   "import <string> - load a build string",
   "reset [all] confirm - wipe this character's data (or everything with 'all')",
@@ -294,7 +257,6 @@ UP.commands = {
       UP:Print("usage: /upet import <string>")
       return
     end
-    -- The planner's import applies the same checks as its Import button.
     if UP.UI and UP.UI.Import then
       UP.UI:Import(rest)
       return
@@ -324,40 +286,8 @@ UP.commands = {
     local build = GetBuildInfo and table.concat({ GetBuildInfo() }, " ") or "?"
     UP:Print("v" .. UP.version .. ", client " .. build .. ", DB v"
       .. tostring(UP.db and UP.db.version) .. ", " .. UP:CharKey())
-    for _, path in ipairs(UP.DEBUG_APIS) do
-      local value = lookup(path)
-      local state = value == nil and "|cffff4040missing|r" or ("|cff40ff40" .. type(value) .. "|r")
-      UP:Print("  " .. path .. ": " .. state)
-    end
-    if UnitExists and UnitExists("pet") then
-      local bank = UP.lookup("Enum.SpellBookSpellBank.Pet")
-      UP:Print("pet: family " .. tostring(probe("UnitCreatureFamily", "pet"))
-        .. ", level " .. tostring(probe("UnitLevel", "pet")))
-      UP:Print("  training points: " .. tostring(probe("C_PetInfo.GetPetTrainingPoints")))
-      UP:Print("  loyalty: " .. tostring(probe("C_PetInfo.GetPetLoyalty")))
-      UP:Print("  pet spells: " .. tostring(probe("C_SpellBook.HasPetSpells")) .. " (bank " .. tostring(bank) .. ")")
-    else
-      UP:Print("no pet summoned; summon one and run /upet debug again for pet values.")
-    end
-    UP:Print("  Beast Training spell 5149: " .. tostring(probe("C_Spell.GetSpellName", 5149)))
     if UP.Scanner and UP.Scanner.DebugDump then
-      local ok, lines = pcall(UP.Scanner.DebugDump, UP.Scanner)
-      if ok and type(lines) == "table" then
-        for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
-      end
-    end
-    -- Raw trainer costs for a few ranks, to find which GetTrainerServiceCost return is TP.
-    local shown = 0
-    for skill, ranks in pairs(UP.char and UP.char.craftCosts or {}) do
-      for rank, entry in pairs(ranks) do
-        if shown < 5 and type(entry) == "table" then
-          local costs = {}
-          for i = 1, (entry.costs and entry.costs.n or 0) do costs[#costs + 1] = tostring(entry.costs[i]) end
-          UP:Print(("  cost %s %d: level %s, returns {%s}"):format(skill, rank, tostring(entry.level),
-            table.concat(costs, ", ")))
-          shown = shown + 1
-        end
-      end
+      for _, line in ipairs(UP.Scanner:DebugDump()) do UP:Print("  " .. line) end
     end
   end,
 }

@@ -1,7 +1,4 @@
--- UltimatePet: Planner.lua
--- Pure build logic: TP budget, build cost, active count, validation and the per-rank status engine.
--- No frames or game API calls; everything reads UP.Skills, UP.Families and UP.Beasts.
---
+-- Build logic with no frames or game API calls.
 -- A build is { family = "Cat", level = 60, loyalty = 6, skills = { ["Bite"] = 8, ... } }.
 -- Skill names are the keys of UP.Skills; a rank of 0 (or no entry) means the skill isn't taken.
 local _, UP = ...
@@ -9,7 +6,7 @@ local _, UP = ...
 local Planner = UP.Planner or {}
 UP.Planner = Planner
 
--- Pets can only use this many active abilities at once. Shown, not enforced (UI decision D).
+-- Pets can only use this many active abilities at once. Shown, not enforced.
 Planner.MAX_ACTIVE = 4
 Planner.MAX_LEVEL = 60
 Planner.MAX_LOYALTY = 6
@@ -45,13 +42,11 @@ function Planner.LoyaltyLevel(value, total, petLevel)
   return nil
 end
 
--- The rank data for skill/rank, or nil when either doesn't exist.
 local function rankData(skill, rank)
   local s = UP.Skills[skill]
   return s and s.ranks[rank] or nil
 end
 
--- Calls fn(skill, rank) for every taken skill of the build (rank > 0), in no particular order.
 local function eachTaken(build, fn)
   for skill, rank in pairs(build and build.skills or {}) do
     if type(rank) == "number" and rank > 0 then fn(skill, rank) end
@@ -72,7 +67,6 @@ function Planner.Cost(build)
   return known, unknown
 end
 
--- Number of active (non-passive) skills the build takes.
 function Planner.ActiveCount(build)
   local n = 0
   eachTaken(build, function(skill)
@@ -111,7 +105,7 @@ function Planner.Validate(build)
   return problems
 end
 
--- Position of a skill in UP.SkillOrder (unknown skills sort last).
+-- Unknown skills sort last.
 function Planner.SkillIndex(skill)
   if not Planner.skillIndex then
     Planner.skillIndex = {}
@@ -186,7 +180,7 @@ function Planner.Teachers(skill, rank, limit)
   return out
 end
 
--- A deep copy of a build (or preset) with only the build fields.
+-- Copies only the build fields, so a preset becomes a plain build.
 function Planner.CopyBuild(build)
   local skills = {}
   for skill, rank in pairs(build.skills or {}) do skills[skill] = rank end
