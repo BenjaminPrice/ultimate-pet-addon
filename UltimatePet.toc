@@ -25,4 +25,7 @@ Planner.lua
 Serializer.lua
 Waypoints.lua
 UI.lua
+PetPanel.lua
 MinimapButton.lua
+Alerts.lua
+Options.lua

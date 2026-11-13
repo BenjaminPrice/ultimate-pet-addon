@@ -21,6 +21,10 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
    Not Unlocked, Trainer (bought from a pet trainer) or No known source.
 5. Click a **Not Unlocked** rank to list beasts that teach it, then **Waypoint** to mark one.
 6. Save builds, set one active for your current pet, or share them with Export and Import.
+7. The Pet tab of the character sheet (C) shows a panel with your pet's TP, its active build and
+   the ranks it knows against that build. `/upet pet` opens the same panel on its own.
+8. When you learn a new rank from a tamed beast, a popup and a sound tell you which one. Turn
+   either off in the options page or with `/upet alerts`.
 
 ## Install
 
@@ -47,6 +51,9 @@ collectors such as EllesmereUI's minimap module and broker bars such as Titan Pa
 |---|---|
 | (none) or `show` | Open or close the planner window |
 | `scan` | Read the active pet again and print its family, level and TP |
+| `pet` | Show or hide the current pet panel as a separate window |
+| `alerts` | Show alert settings; `alerts popup|sound|chat on|off` changes them, `alerts test` shows a sample |
+| `options` | Open the options page (also under Options, AddOns) |
 | `minimap` | Show or hide the minimap button |
 | `debug` | Print the client build, which game APIs exist, the pet and scanner state (paste it into bug reports) |
 | `export` | Print the current build as a shareable string |
@@ -93,6 +100,10 @@ kept locally, not in the repo.
 
 It rewrites the three files and `tools/DATA_NOTES.md`, which lists every source conflict, unknown
 TP cost and beast without coordinates.
+
+To build a zip for sharing, run `python3 -I tools/package.py`. It writes
+`.release/UltimatePet-<version>.zip` with only the files the game loads, inside an `UltimatePet/`
+folder. Testers extract it into `Interface/AddOns/`.
 
 For in-game testing, enable Lua errors with `/console scriptErrors 1`, then run `/upet debug`.
 

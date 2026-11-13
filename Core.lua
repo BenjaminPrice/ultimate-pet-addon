@@ -84,6 +84,8 @@ UP.DB_VERSION = 2
 local GLOBAL_DEFAULTS = {
   minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
   frame = {},
+  petPanel = {}, -- floating pet panel position
+  alerts = { popup = true, sound = true, chat = true }, -- learned-ability alerts
 }
 
 local CHAR_DEFAULTS = {
@@ -207,6 +209,8 @@ UP.DEBUG_APIS = {
   -- Maps, UI, waypoints
   "C_Map.GetMapInfo", "C_Map.SetUserWaypoint", "UiMapPoint.CreateFromCoordinates",
   "C_Timer.After", "UIDropDownMenu_Initialize",
+  -- Character sheet: Classic Pet tab, or Forever's pet view inside the paper doll
+  "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "CharacterFrame.TitleContainer",
   "TomTom.AddWaypoint",
 }
 
@@ -239,6 +243,9 @@ end
 local HELP = {
   "show - open the planner (also /upet on its own)",
   "scan - read the active pet again",
+  "pet - show the current pet panel",
+  "alerts [popup|sound|chat on|off | test] - learned-ability alert settings",
+  "options - open the options page",
   "minimap - show or hide the minimap button",
   "debug - list the game APIs this client provides",
   "export - print the current build string",
@@ -266,6 +273,15 @@ UP.commands = {
       UP:Print(("%s: %s, level %s, %s TP total, %s used."):format(tostring(pet.name), tostring(pet.family),
         tostring(pet.level), tostring(pet.tpTotal), tostring(pet.tpUsed)))
     end
+  end,
+  pet = function()
+    if UP.PetPanel and UP.PetPanel.Toggle then UP.PetPanel:Toggle() else notImplemented("pet") end
+  end,
+  alerts = function(rest)
+    if UP.Alerts and UP.Alerts.Slash then UP.Alerts.Slash(rest) else notImplemented("alerts") end
+  end,
+  options = function()
+    if UP.Options and UP.Options.Open then UP.Options:Open() else notImplemented("options") end
   end,
   minimap = function()
     if UP.Minimap and UP.Minimap.Toggle then UP.Minimap:Toggle() else notImplemented("minimap") end
@@ -323,6 +339,7 @@ UP.commands = {
     else
       UP:Print("no pet summoned; summon one and run /upet debug again for pet values.")
     end
+    UP:Print("  Beast Training spell 5149: " .. tostring(probe("C_Spell.GetSpellName", 5149)))
     if UP.Scanner and UP.Scanner.DebugDump then
       local ok, lines = pcall(UP.Scanner.DebugDump, UP.Scanner)
       if ok and type(lines) == "table" then

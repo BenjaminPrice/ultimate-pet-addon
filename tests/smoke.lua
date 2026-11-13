@@ -8,7 +8,8 @@ dofile("tests/uistub.lua").install() -- frame API for /upet show
 wow.fire("ADDON_LOADED", "UltimatePet")
 assert(type(UltimatePetDB) == "table", "UltimatePetDB not created")
 local commands = {
-  "/upet help", "/upet debug", "/ultimatepet show", "/upet", "/upet scan", "/upet minimap",
+  "/upet help", "/upet debug", "/ultimatepet show", "/upet", "/upet scan", "/upet pet", "/upet minimap",
+  "/upet alerts", "/upet alerts sound off", "/upet alerts test", "/upet options",
   "/upet reset", "/upet reset confirm",
 }
 for _, line in ipairs(commands) do
