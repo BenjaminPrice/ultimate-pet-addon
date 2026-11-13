@@ -1,7 +1,7 @@
 -- UltimatePet: PetPanel.lua
 -- A small panel for the summoned pet: its level, loyalty and TP, the build assigned to it, and the
 -- skills it knows (with the build's target ranks). It sits beside the character sheet while the Pet
--- tab (PetPaperDollFrame) is open, and `/upet pet` also opens it as a floating window.
+-- tab or pet view is open, and `/upet pet` also opens it as a floating window.
 --
 -- Public API
 --   PetPanel.Model(pet, build, ctx)   what the panel shows (pure; tested without frames)
@@ -21,9 +21,14 @@ local format = string.format
 
 local FRAME_NAME = "UltimatePetPetPanel"
 local WIDTH = 240
+-- Frames that are shown only while the character sheet shows the pet: the Classic Pet tab, and
+-- the pet view inside the paper doll on the modern-style Forever character sheet.
+local PET_VIEWS = { "PetPaperDollFrame", "CharacterStatsPanePetScrollBox" }
 -- Offset from CharacterFrame's TOPRIGHT. The Classic character frame art leaves about 32px of
--- transparent space on its right edge.
+-- transparent space on its right edge; the modern-style Forever frame (with a TitleContainer)
+-- ends at its visible edge.
 local ATTACH_X, ATTACH_Y = -32, -14
+local MODERN_X, MODERN_Y = 4, 0
 -- Offset from PetPaperDollFrame's TOPRIGHT when CharacterFrame doesn't exist.
 local FALLBACK_X, FALLBACK_Y = 0, 0
 local PAD = 10
@@ -213,7 +218,9 @@ end
 local function placeAttached(f)
   f:ClearAllPoints()
   local character, petFrame = blizzard("CharacterFrame"), blizzard("PetPaperDollFrame")
-  if character then
+  if character and character.TitleContainer then
+    f:SetPoint("TOPLEFT", character, "TOPRIGHT", MODERN_X, MODERN_Y)
+  elseif character then
     f:SetPoint("TOPLEFT", character, "TOPRIGHT", ATTACH_X, ATTACH_Y)
   elseif petFrame then
     f:SetPoint("TOPLEFT", petFrame, "TOPRIGHT", FALLBACK_X, FALLBACK_Y)
@@ -402,10 +409,18 @@ function PetPanel:IsShown()
   return self.frame ~= nil and self.frame:IsShown()
 end
 
--- /upet pet: refresh while the Pet tab is open, else toggle the floating window.
+-- Whether the character sheet is showing the pet (Pet tab or pet view).
+local function petViewOpen()
+  for _, name in ipairs(PET_VIEWS) do
+    if isVisible(blizzard(name)) then return true end
+  end
+  return false
+end
+
+-- /upet pet: refresh while the pet view is open, else toggle the floating window.
 function PetPanel:Toggle()
   self:Hook()
-  if isVisible(blizzard("PetPaperDollFrame")) then
+  if petViewOpen() then
     self:ShowAttached()
   elseif self:IsShown() and self.mode == "floating" then
     self:Hide()
@@ -421,19 +436,25 @@ function PetPanel:OpenPlanner()
   UI:Show()
 end
 
--- Hooks the Pet tab's OnShow/OnHide once it exists. Returns true when hooked.
+-- Hooks OnShow/OnHide of every pet view that exists, once each. Returns true when at least one
+-- is hooked.
 function PetPanel:Hook()
-  if self.hooked then return true end
-  local petFrame = blizzard("PetPaperDollFrame")
-  if not (petFrame and type(petFrame.HookScript) == "function") then return false end
-  local ok = pcall(petFrame.HookScript, petFrame, "OnShow", function() PetPanel:ShowAttached() end)
-  if not ok then return false end
-  pcall(petFrame.HookScript, petFrame, "OnHide", function()
-    if PetPanel.mode == "attached" then PetPanel:Hide() end
-  end)
-  self.hooked = true
-  if isVisible(petFrame) then self:ShowAttached() end
-  return true
+  self.hookedViews = self.hookedViews or {}
+  for _, name in ipairs(PET_VIEWS) do
+    local view = blizzard(name)
+    if not self.hookedViews[name] and view and type(view.HookScript) == "function" then
+      local ok = pcall(view.HookScript, view, "OnShow", function() PetPanel:ShowAttached() end)
+      if ok then
+        pcall(view.HookScript, view, "OnHide", function()
+          if PetPanel.mode == "attached" and not petViewOpen() then PetPanel:Hide() end
+        end)
+        self.hookedViews[name] = true
+        if isVisible(view) then self:ShowAttached() end
+      end
+    end
+  end
+  self.hooked = next(self.hookedViews) ~= nil
+  return self.hooked
 end
 
 UP:On("PLAYER_LOGIN", function() PetPanel:Hook() end)

@@ -208,7 +208,9 @@ UP.DEBUG_APIS = {
   "Enum.SpellBookSpellBank", "C_Spell.GetSpellTexture", "C_Spell.GetSpellSubtext", "GetSpellTexture",
   -- Maps, UI, waypoints
   "C_Map.GetMapInfo", "C_Map.SetUserWaypoint", "UiMapPoint.CreateFromCoordinates",
-  "C_Timer.After", "UIDropDownMenu_Initialize", "PetPaperDollFrame", "CharacterFrame",
+  "C_Timer.After", "UIDropDownMenu_Initialize",
+  -- Character sheet: Classic Pet tab, or Forever's pet view inside the paper doll
+  "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "CharacterFrame.TitleContainer",
   "TomTom.AddWaypoint",
 }
 

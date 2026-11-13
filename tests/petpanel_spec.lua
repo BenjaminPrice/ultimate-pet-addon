@@ -9,7 +9,7 @@ local FANG = {
   known = { Bite = 2, Growl = 1, ["Great Stamina"] = 1, ["Natural Armor"] = 1 }, key = 7,
 }
 
-local BLIZZARD = { "PetPaperDollFrame", "CharacterFrame", "UltimatePetPetPanel" }
+local BLIZZARD = { "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "UltimatePetPetPanel" }
 
 local function copy(t)
   if type(t) ~= "table" then return t end
@@ -187,6 +187,31 @@ describe("PetPanel", function()
       -- Hooks only once.
       wow.fire("PLAYER_LOGIN")
       assert.are.equal(2, #petTab.hooks)
+    end)
+
+    it("follows the pet view of the modern Forever character sheet", function()
+      local character = blizzardFrame("CharacterFrame")
+      character.TitleContainer = {}
+      local petView = blizzardFrame("CharacterStatsPanePetScrollBox")
+      setPet(FANG)
+      wow.fire("PLAYER_LOGIN")
+      assert.are.same({ "OnShow", "OnHide" }, petView.hooks)
+
+      petView:Show()
+      local f = rawget(_G, "UltimatePetPetPanel")
+      assert.is_true(f:IsShown())
+      assert.are.equal("attached", PetPanel.mode)
+      assert.are.same({ "TOPLEFT", character, "TOPRIGHT", 4, 0 }, f.points[1])
+
+      petView:Hide()
+      assert.is_false(f:IsShown())
+    end)
+
+    it("hooks a pet view that appears after login", function()
+      wow.fire("PLAYER_LOGIN")
+      local petView = blizzardFrame("CharacterStatsPanePetScrollBox")
+      wow.slash("/upet pet")
+      assert.are.same({ "OnShow", "OnHide" }, petView.hooks)
     end)
 
     it("anchors to PetPaperDollFrame without CharacterFrame", function()
