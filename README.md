@@ -15,14 +15,16 @@ built-in map pin) to the tameable beasts that teach ranks you are missing.
 
 1. Open your Beast Training window once (the spellbook icon). UltimatePet reads which ranks you
    know. Do it again after learning new ranks.
-2. Type `/upet` or click the minimap button to open the planner.
+2. Type `/upet` or click the minimap button to open the planner. Right-click the minimap button
+   for a menu with the planner and the pet view.
 3. Pick a family and a preset, or tick **Use current pet** to plan for the pet you have out.
 4. Each chosen rank shows its status: Trained, Ready to Train, Unlocked (with what's missing),
    Not Unlocked, Trainer (bought from a pet trainer) or No known source.
 5. Click a **Not Unlocked** rank to list beasts that teach it, then **Waypoint** to mark one.
 6. Save builds, set one active for your current pet, or share them with Export and Import.
 7. The Pet tab of the character sheet (C) shows a panel with your pet's TP, its active build and
-   the ranks it knows against that build. `/upet pet` opens the same panel on its own.
+   the ranks it knows against that build. `/upet pet` or the planner's **Pet view**
+   button opens the same panel on its own.
 8. When you learn a new rank from a tamed beast, a popup and a sound tell you which one. Turn
    either off in the options page or with `/upet alerts`.
 

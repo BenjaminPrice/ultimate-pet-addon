@@ -3,6 +3,8 @@
 -- LibDBIcon10_UltimatePet, which minimap button collectors (EllesmereUIMinimap and others) group
 -- with other addons; broker displays (Titan Panel, ElvUI datatexts, ...) can show the launcher.
 local _, UP = ...
+-- luacheck: read globals UIParent ToggleDropDownMenu
+-- luacheck: read globals UIDropDownMenu_Initialize UIDropDownMenu_CreateInfo UIDropDownMenu_AddButton
 
 UP.Minimap = UP.Minimap or {}
 local Minimap = UP.Minimap
@@ -23,12 +25,69 @@ local function settings()
   return UP.db and UP.db.global and UP.db.global.minimap
 end
 
--- Opens or closes the planner.
-function Minimap.OnClick(_, button)
+local function openPlanner()
   if UP.UI and UP.UI.Toggle then
     UP.UI:Toggle()
   else
     UP:Print("The planner window isn't available.")
+  end
+end
+
+local function openPetView()
+  if UP.PetPanel and UP.PetPanel.Toggle then
+    UP.PetPanel:Toggle()
+  else
+    UP:Print("The pet view isn't available.")
+  end
+end
+
+-- Entries of the right-click menu, in order.
+Minimap.MENU = {
+  { text = "Skill planner", func = openPlanner },
+  { text = "Pet view", func = openPetView },
+}
+
+-- Older clients without MenuUtil: a UIDropDownMenu at the cursor.
+local function legacyMenu()
+  local frame = Minimap.dropdown
+  if not frame then
+    frame = CreateFrame("Frame", "UltimatePetMinimapMenu", UIParent, "UIDropDownMenuTemplate")
+    Minimap.dropdown = frame
+  end
+  UIDropDownMenu_Initialize(frame, function(_, level)
+    if level ~= 1 then return end
+    local title = UIDropDownMenu_CreateInfo()
+    title.text, title.isTitle, title.notCheckable = NAME, true, true
+    UIDropDownMenu_AddButton(title, level)
+    for _, item in ipairs(Minimap.MENU) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text, info.func, info.notCheckable = item.text, item.func, true
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end, "MENU")
+  ToggleDropDownMenu(1, nil, frame, "cursor", 0, 0)
+end
+
+-- Shows the right-click menu next to the button.
+function Minimap:OpenMenu(owner)
+  local menuUtil = rawget(_G, "MenuUtil")
+  if menuUtil and menuUtil.CreateContextMenu then
+    return menuUtil.CreateContextMenu(owner, function(_, root)
+      root:CreateTitle(NAME)
+      for _, item in ipairs(Minimap.MENU) do root:CreateButton(item.text, item.func) end
+    end)
+  end
+  if rawget(_G, "UIDropDownMenu_Initialize") and rawget(_G, "ToggleDropDownMenu") then
+    return legacyMenu()
+  end
+end
+
+-- Left-click opens or closes the planner; right-click shows the menu.
+function Minimap.OnClick(frame, button)
+  if button == "RightButton" then
+    Minimap:OpenMenu(frame)
+  else
+    openPlanner()
   end
   return button
 end
@@ -38,6 +97,7 @@ function Minimap.OnTooltipShow(tooltip)
   if not (tooltip and tooltip.AddLine) then return end
   tooltip:AddLine("UltimatePet")
   tooltip:AddLine("Left-click: open planner", 1, 1, 1)
+  tooltip:AddLine("Right-click: menu", 1, 1, 1)
   local pet = UP.Scanner and UP.Scanner.pet
   if pet and pet.exists then
     local unspent = pet.unspent ~= nil and tostring(pet.unspent) or "?"

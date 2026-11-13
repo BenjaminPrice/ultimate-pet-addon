@@ -179,6 +179,14 @@ describe("UI", function()
       assert.is_true(UI.frame:IsShown())
     end)
 
+    it("opens the pet view from the Pet view button", function()
+      UI:Toggle()
+      local toggled = 0
+      UP.PetPanel.Toggle = function() toggled = toggled + 1 end
+      UI.w.petViewButton:Click()
+      assert.are.equal(1, toggled)
+    end)
+
     it("builds with every template missing (plain fallbacks)", function()
       stub.uninstall()
       load({ ui = { missing = { all = true, UIDropDownMenu = true } } })

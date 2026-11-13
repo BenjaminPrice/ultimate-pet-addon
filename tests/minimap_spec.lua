@@ -67,11 +67,55 @@ describe("Minimap button", function()
     assert.are.equal(1, toggled)
   end)
 
+  it("shows a menu with the planner and the pet view on right-click", function()
+    wow.fire("PLAYER_LOGIN")
+    local built = {}
+    local root = {
+      CreateTitle = function(_, text) built[#built + 1] = { title = text } end,
+      CreateButton = function(_, text, func) built[#built + 1] = { text = text, func = func } end,
+    }
+    local owner = {}
+    _G.MenuUtil = { CreateContextMenu = function(o, gen) assert.are.equal(owner, o); gen(o, root) end }
+    local planner, petView = 0, 0
+    UP.UI = { Toggle = function() planner = planner + 1 end }
+    UP.PetPanel = { Toggle = function() petView = petView + 1 end }
+    rec.objects.UltimatePet.OnClick(owner, "RightButton")
+    _G.MenuUtil = nil
+    assert.are.same({ title = "UltimatePet" }, built[1])
+    assert.are.equal("Skill planner", built[2].text)
+    assert.are.equal("Pet view", built[3].text)
+    assert.are.equal(0, planner)
+    built[2].func()
+    built[3].func()
+    assert.are.equal(1, planner)
+    assert.are.equal(1, petView)
+  end)
+
+  it("falls back to a dropdown menu without MenuUtil", function()
+    local added, toggled = {}, nil
+    local createFrame = _G.CreateFrame
+    _G.UIParent = {}
+    _G.CreateFrame = function() return {} end
+    _G.UIDropDownMenu_CreateInfo = function() return {} end
+    _G.UIDropDownMenu_AddButton = function(info) added[#added + 1] = info end
+    _G.UIDropDownMenu_Initialize = function(frame, init) init(frame, 1) end
+    _G.ToggleDropDownMenu = function(_, _, frame, anchor) toggled = { frame = frame, anchor = anchor } end
+    UP.Minimap.OnClick({}, "RightButton")
+    for _, k in ipairs({ "UIParent", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
+      "UIDropDownMenu_Initialize", "ToggleDropDownMenu" }) do _G[k] = nil end
+    _G.CreateFrame = createFrame
+    assert.is_true(added[1].isTitle)
+    assert.are.equal("Skill planner", added[2].text)
+    assert.are.equal("Pet view", added[3].text)
+    assert.are.equal("cursor", toggled.anchor)
+  end)
+
   it("shows a plain tooltip with the sync hint", function()
     local t = tooltip()
     UP.Minimap.OnTooltipShow(t)
     assert.are.equal("UltimatePet", t.lines[1])
     assert.are.equal("Left-click: open planner", t.lines[2])
+    assert.are.equal("Right-click: menu", t.lines[3])
     assert.are.equal("Beast Training not synced", t.lines[#t.lines])
   end)
 
@@ -79,7 +123,7 @@ describe("Minimap button", function()
     UP.Scanner.pet = { exists = true, family = "Wolf", level = 10, tpTotal = 0, unspent = -4 }
     local t = tooltip()
     UP.Minimap.OnTooltipShow(t)
-    assert.are.equal("Wolf, level 10, -4 / 0 TP free", t.lines[3])
+    assert.are.equal("Wolf, level 10, -4 / 0 TP free", t.lines[4])
   end)
 
   it("hides and shows the button with /upet minimap and saves the choice", function()

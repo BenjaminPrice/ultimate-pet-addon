@@ -181,6 +181,15 @@ local function resolveBuild(name, family)
   return nil
 end
 
+-- Opens or closes the current pet panel.
+function UI:OpenPetView()
+  if UP.PetPanel and UP.PetPanel.Toggle then
+    UP.PetPanel:Toggle()
+  else
+    UP:Print("The pet view isn't available.")
+  end
+end
+
 -- True when the "Use current pet" setting is on and a pet of a known family is out.
 function UI:UsingPet()
   local p = pet()
@@ -1205,6 +1214,10 @@ local function buildBottomBar(f, w)
   local active = button(f, "Set active for current pet", 180)
   active:SetPoint("LEFT", delete, "RIGHT", 16, 0)
   active:SetScript("OnClick", function() UI:SetActiveForPet() end)
+  local petView = button(f, "Pet view", 80)
+  petView:SetPoint("BOTTOMRIGHT", -20, 42)
+  petView:SetScript("OnClick", function() UI:OpenPetView() end)
+  w.petViewButton = petView
 
   local export = button(f, "Export", 70)
   export:SetPoint("BOTTOMLEFT", 14, 12)
