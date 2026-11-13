@@ -115,6 +115,42 @@ describe("Core", function()
     end)
   end)
 
+  describe("SpellText", function()
+    local loaded, requested
+    before_each(function()
+      loaded, requested = {}, {}
+      wow.set("C_Spell", {
+        GetSpellDescription = function(id) return loaded[id] or "" end,
+        RequestLoadSpellData = function(id) requested[#requested + 1] = id end,
+      })
+    end)
+    after_each(function() wow.restore() end)
+
+    it("returns the client's text for a loaded spell", function()
+      loaded[17253] = "Bite the enemy, causing 7 to 9 damage."
+      assert.are.equal("Bite the enemy, causing 7 to 9 damage.", UP.SpellText(17253))
+      assert.is_nil(UP.SpellText(nil))
+    end)
+
+    it("requests an unloaded spell once and calls back when it arrives", function()
+      local calls = 0
+      assert.is_nil(UP.SpellText(17255, function() calls = calls + 10 end))
+      assert.is_nil(UP.SpellText(17255, function() calls = calls + 1 end))
+      assert.are.same({ 17255 }, requested)
+      wow.fire("SPELL_DATA_LOAD_RESULT", 17255, true)
+      assert.are.equal(1, calls)
+      wow.fire("SPELL_DATA_LOAD_RESULT", 17255, true)
+      assert.are.equal(1, calls)
+    end)
+
+    it("skips the callback when the load fails", function()
+      local called = false
+      UP.SpellText(17256, function() called = true end)
+      wow.fire("SPELL_DATA_LOAD_RESULT", 17256, false)
+      assert.is_false(called)
+    end)
+  end)
+
   describe("events", function()
     it("registers game events on the frame but not internal messages", function()
       UP:On("UNIT_PET", function() end)

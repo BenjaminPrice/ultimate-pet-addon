@@ -220,6 +220,23 @@ describe("PetPanel", function()
   end)
 
   describe("floating", function()
+    it("closes with the planner when docked beside it, but not after being dragged away", function()
+      setPet(FANG)
+      UP.UI:Toggle()
+      UP.UI.w.petViewButton:Click()
+      local f = PetPanel:Create()
+      assert.is_true(PetPanel.docked)
+      UP.UI:Toggle()
+      assert.is_false(f:IsShown())
+
+      UP.UI:Toggle()
+      UP.UI.w.petViewButton:Click()
+      stub.fire(f, "OnDragStop")
+      assert.is_false(PetPanel.docked)
+      UP.UI:Toggle()
+      assert.is_true(f:IsShown())
+    end)
+
     it("opens beside the planner and in front of it from the Pet view button", function()
       setPet(FANG)
       local strata
@@ -329,6 +346,19 @@ describe("PetPanel", function()
       assert.is_nil(up.delta)
       assert.is_true(up.enough)
       assert.are.equal("TP cost unknown.", PetPanel.TrainTooltip("Swipe", up, false)[2][1])
+    end)
+
+    it("puts the spell text for the rank to train under the title", function()
+      wow.set("C_Spell", { GetSpellDescription = function(id)
+        return id == UP.Skills.Bite.ranks[3].spellId and "Bite the enemy, causing 24 to 28 damage." or ""
+      end })
+      UP.char.unlocked = { Bite = { [3] = true } }
+      local up = PetPanel.Upgrade("Bite", 2, { unlocked = UP.char.unlocked, petLevel = 16, unspent = 10 })
+      local lines = PetPanel.TrainTooltip("Bite", up, false)
+      wow.restore()
+      assert.are.equal("Bite the enemy, causing 24 to 28 damage.", lines[2][1])
+      assert.is_true(lines[2][5])
+      assert.are.equal("Costs 3 TP.", lines[3][1])
     end)
 
     it("shows the icon on rows with an upgrade and a secure Beast Training button on hover", function()

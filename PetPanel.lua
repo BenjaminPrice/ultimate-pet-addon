@@ -208,6 +208,7 @@ local function savePosition(f)
   end
 end
 
+-- Returns true when the panel is docked to the planner's side.
 local function placeFloating(f)
   local pos = UP.db and UP.db.global and UP.db.global.petPanel
   local planner = UP.UI and UP.UI.frame
@@ -216,9 +217,11 @@ local function placeFloating(f)
     f:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x or 0, pos.y or 0)
   elseif planner and planner:IsShown() then
     f:SetPoint("TOPLEFT", planner, "TOPRIGHT", 4, 0)
+    return true
   else
     f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   end
+  return false
 end
 
 local function placeAttached(f)
@@ -276,7 +279,10 @@ local function buildFrame()
   end)
   f:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
-    if PetPanel.mode == "floating" then savePosition(self) end
+    if PetPanel.mode == "floating" then
+      savePosition(self)
+      PetPanel.docked = false
+    end
   end)
   f:SetScript("OnShow", function() PetPanel:Refresh() end)
 
@@ -309,8 +315,11 @@ local function buildFrame()
   return f
 end
 
-function PetPanel.TrainTooltip(skill, up, inCombat)
+function PetPanel.TrainTooltip(skill, up, inCombat, onLoad)
   local lines = { { format("%s (Rank %d) can be trained.", skill, up.rank), 1, 1, 1 } }
+  local r = UP.Skills[skill] and UP.Skills[skill].ranks[up.rank]
+  local description = r and UP.SpellText(r.spellId, onLoad)
+  if description then lines[#lines + 1] = { description, 1, 0.82, 0, true } end
   if up.delta == nil then
     lines[#lines + 1] = { "TP cost unknown.", 0.56, 0.64, 0.74 }
   elseif up.enough then
@@ -332,11 +341,19 @@ local function inCombat()
   return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
 end
 
-local function showTrainTooltip(owner, rm)
+local showTrainTooltip
+function showTrainTooltip(owner, rm)
   if not (GameTooltip and rm and rm.upgrade) then return end
   GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-  for i, l in ipairs(PetPanel.TrainTooltip(rm.skill, rm.upgrade, inCombat())) do
-    if i == 1 then GameTooltip:SetText(l[1], l[2], l[3], l[4]) else GameTooltip:AddLine(l[1], l[2], l[3], l[4]) end
+  local function reshow()
+    if GameTooltip:IsOwned(owner) then showTrainTooltip(owner, rm) end
+  end
+  for i, l in ipairs(PetPanel.TrainTooltip(rm.skill, rm.upgrade, inCombat(), reshow)) do
+    if i == 1 then
+      GameTooltip:SetText(l[1], l[2], l[3], l[4])
+    else
+      GameTooltip:AddLine(l[1], l[2], l[3], l[4], l[5])
+    end
   end
   GameTooltip:Show()
 end
@@ -489,6 +506,7 @@ end
 function PetPanel:ShowAttached()
   local f = self:Create()
   self.mode = "attached"
+  self.docked = false
   f:SetFrameStrata("MEDIUM")
   placeAttached(f)
   f.close:Hide()
@@ -500,7 +518,7 @@ function PetPanel:ShowFloating()
   self.mode = "floating"
   -- Same strata as the planner, raised, so the planner never covers it.
   f:SetFrameStrata("HIGH")
-  placeFloating(f)
+  self.docked = placeFloating(f)
   f.close:Show()
   if f:IsShown() then self:Refresh() else f:Show() end
   if f.Raise then f:Raise() end
@@ -509,6 +527,7 @@ end
 function PetPanel:Hide()
   if self.frame then self.frame:Hide() end
   self.mode = nil
+  self.docked = false
 end
 
 function PetPanel:IsShown()

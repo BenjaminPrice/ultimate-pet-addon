@@ -321,6 +321,66 @@ describe("Scanner", function()
     end)
   end)
 
+  describe("missing TP costs", function()
+    local function rend(U, rank, used)
+      forPet({
+        { name = "Bite", spellID = spell(U, "Bite", 2) },
+        { name = "Savage Rend", spellID = spell(U, "Savage Rend", rank) },
+      }, { total = 100, used = used })
+    end
+
+    it("works out the one missing cost from used TP", function()
+      assert.is_nil(UP.Skills["Savage Rend"].ranks[1].tp)
+      local skill, rank, cost = UP.Scanner.MissingCost({ exists = true, tpUsed = 11,
+        known = { Bite = 2, ["Savage Rend"] = 1 } })
+      assert.are.same({ "Savage Rend", 1, 7 }, { skill, rank, cost })
+    end)
+
+    it("gives up with two missing costs or an impossible result", function()
+      assert.is_nil(UP.Scanner.MissingCost({ exists = true, tpUsed = 11, known = { Web = 1, ["Savage Rend"] = 1 } }))
+      assert.is_nil(UP.Scanner.MissingCost({ exists = true, tpUsed = 2, known = { Bite = 2, ["Savage Rend"] = 1 } }))
+      UP.Skills["Savage Rend"].ranks[1].tp = 10
+      assert.is_nil(UP.Scanner.MissingCost({ exists = true, tpUsed = 9, known = { Bite = 2, ["Savage Rend"] = 2 } }))
+    end)
+
+    it("saves a cost only when a second read agrees", function()
+      local queue = {}
+      set("C_Timer", { After = function(_, fn) queue[#queue + 1] = fn end })
+      rend(UP, 1, 11)
+      wow.now = 100
+      UP.Scanner:ReadPet()
+      assert.is_nil(UP.Skills["Savage Rend"].ranks[1].tp)
+      assert.are.equal(1, #queue)
+      wow.now = 102.5
+      queue[1]()
+      assert.are.equal(7, UP.Skills["Savage Rend"].ranks[1].tp)
+      assert.are.equal(7, UltimatePetDB.global.tpCosts["Savage Rend"][1])
+      assert.matches("Savage Rend (Rank 1) costs 7 TP", wow.chatText(), nil, true)
+    end)
+
+    it("starts over when used TP changes between reads", function()
+      set("C_Timer", nil)
+      rend(UP, 1, 11)
+      wow.now = 100
+      UP.Scanner:ReadPet()
+      rend(UP, 1, 15)
+      wow.now = 103
+      UP.Scanner:ReadPet()
+      assert.is_nil(UP.Skills["Savage Rend"].ranks[1].tp)
+      wow.now = 106
+      UP.Scanner:ReadPet()
+      assert.are.equal(11, UP.Skills["Savage Rend"].ranks[1].tp)
+    end)
+
+    it("applies saved costs on load without overriding the data", function()
+      UP = wow.load({ saved = { version = 3, global = { tpCosts = {
+        ["Savage Rend"] = { [2] = 12 }, Bite = { [2] = 99 } } } } })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      assert.are.equal(12, UP.Skills["Savage Rend"].ranks[2].tp)
+      assert.are.equal(4, UP.Skills.Bite.ranks[2].tp)
+    end)
+  end)
+
   describe("Context", function()
     it("has the planner's shape", function()
       npc(nil)
