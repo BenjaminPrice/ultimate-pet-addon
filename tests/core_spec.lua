@@ -19,12 +19,13 @@ describe("TOC", function()
     assert.are.equal("TomTom", meta.OptionalDeps)
   end)
 
-  it("loads Core first and every listed file registers its module", function()
+  it("loads the embedded libraries, then Core, and every listed file registers its module", function()
     local files = wow.readToc("UltimatePet.toc")
-    assert.are.equal("Core.lua", files[1])
+    assert.are.equal("Libs/embeds.xml", files[1])
+    assert.are.equal("Core.lua", files[2])
     local UP = wow.load()
-    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI",
-                            "Families", "Skills", "Beasts", "Presets" }) do
+    for _, name in ipairs({ "Scanner", "Planner", "Serializer", "Waypoints", "UI", "PetPanel", "Minimap",
+                            "Alerts", "Options", "Families", "Skills", "Beasts", "Presets" }) do
       assert.is_table(UP[name], name)
     end
   end)
@@ -78,7 +79,8 @@ describe("Core", function()
         },
       } })
       wow.fire("ADDON_LOADED", "UltimatePet")
-      assert.are.equal(90, UltimatePetDB.global.minimap.angle)
+      assert.are.equal(90, UltimatePetDB.global.minimap.minimapPos)
+      assert.is_nil(UltimatePetDB.global.minimap.angle)
       assert.is_false(UltimatePetDB.global.minimap.hide)
       assert.is_true(UP.char.unlocked.Bite[3])
       assert.are.equal(123, UP.char.scannedAt)
@@ -158,18 +160,21 @@ describe("Core", function()
       assert.are.equal("UP1:Cat:60-6:Bi8", got)
     end)
 
-    it("shows help for no or an unknown subcommand", function()
+    it("opens the planner for no subcommand and shows help for an unknown one", function()
+      local toggled = 0
+      UP.UI = { Toggle = function() toggled = toggled + 1 end }
       wow.slash("/upet")
+      wow.slash("/upet show")
+      assert.are.equal(2, toggled)
+      wow.slash("/upet help")
       assert.matches("reset", joined(wow.takeChat()))
       wow.slash("/upet frobnicate")
       assert.matches("unknown command 'frobnicate'", joined(wow.takeChat()))
     end)
 
-    it("reports unimplemented commands", function()
-      for _, cmd in ipairs({ "show", "scan", "export", "import abc" }) do
-        wow.slash("/upet " .. cmd)
-        assert.matches("not implemented yet", joined(wow.takeChat()), nil, true)
-      end
+    it("reports no pet for scan", function()
+      wow.slash("/upet scan")
+      assert.matches("No pet summoned.", joined(wow.takeChat()), nil, true)
     end)
 
     it("lists APIs in debug, guarded against missing tables", function()
@@ -190,6 +195,58 @@ describe("Core", function()
       DEFAULT_CHAT_FRAME.AddMessage = function(_, msg) raw = msg end
       UP:Print("hi", 1)
       assert.are.equal("|cffabd473UltimatePet|r: hi 1", raw)
+    end)
+  end)
+
+  describe("export and import", function()
+    before_each(function()
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+    end)
+
+    it("exports the Cat Raid DPS preset when nothing is loaded and no pet is out", function()
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:Cat:60-6:Bi8,Cl8,Da3,Gr7,GS9,NA7" }, wow.takeChat())
+      assert.is_nil(UP.char.currentBuild)
+    end)
+
+    it("defaults to the summoned pet's family", function()
+      UP = wow.load({ petFamily = "Wolf" })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+      wow.slash("/upet export")
+      assert.matches("^UltimatePet: UP1:Wolf:60%-6:", wow.takeChat()[1])
+    end)
+
+    it("imports a build, stores it per character and exports it back", function()
+      local fired = 0
+      UP:On("STATE_CHANGED", function() fired = fired + 1 end)
+      wow.slash("/upet import up1:Cat:60-6: Bi8,Cl8,Da3,Gr7,GS9,NA7")
+      assert.are.same({ "UltimatePet: Imported Cat build (6 skills)." }, wow.takeChat())
+      assert.are.equal(1, fired)
+      assert.are.equal("Cat", UltimatePetDB.chars["Tester-Forever"].currentBuild.family)
+      wow.slash("/upet import UP1:BirdofPrey:20-3:Cl3")
+      assert.are.same({ "UltimatePet: Imported Bird of Prey build (1 skill)." }, wow.takeChat())
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:BirdofPrey:20-3:Cl3" }, wow.takeChat())
+    end)
+
+    it("keeps the current build when an import fails", function()
+      wow.slash("/upet import UP1:Cat:60-6:Sw1")
+      assert.are.same({ "UltimatePet: Import failed: Cat can't learn Swipe." }, wow.takeChat())
+      assert.is_nil(UP.char.currentBuild)
+      wow.slash("/upet import")
+      assert.matches("usage", wow.takeChat()[1])
+    end)
+
+    it("survives a reload", function()
+      wow.slash("/upet import UP1:Wolf:60-6:Bi8")
+      local saved = UltimatePetDB
+      UP = wow.load({ saved = saved })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:Wolf:60-6:Bi8" }, wow.takeChat())
     end)
   end)
 

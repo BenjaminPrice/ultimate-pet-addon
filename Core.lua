@@ -79,11 +79,13 @@ end
 -- SavedVariables
 -- ---------------------------------------------------------------------------
 
-UP.DB_VERSION = 1
+UP.DB_VERSION = 2
 
 local GLOBAL_DEFAULTS = {
-  minimap = { angle = 225, hide = false },
+  minimap = { hide = false }, -- owned by LibDBIcon (hide, minimapPos, lock)
   frame = {},
+  petPanel = {}, -- floating pet panel position
+  alerts = { popup = true, sound = true, chat = true }, -- learned-ability alerts
 }
 
 local CHAR_DEFAULTS = {
@@ -92,6 +94,7 @@ local CHAR_DEFAULTS = {
   builds = {},     -- [name] = build table
   petBuild = {},   -- [petName .. "|" .. family] = build name
   -- scannedAt: time of the last Beast Training scan; nil until the first one
+  -- currentBuild: the build last loaded (import or planner); nil = CurrentBuild()'s default
 }
 
 -- Fills missing keys of t from defaults, recursing into tables; never overwrites a value.
@@ -113,6 +116,14 @@ UP.migrations = {
   [1] = function(db)
     if type(db.global) ~= "table" then db.global = nil end
     if type(db.chars) ~= "table" then db.chars = nil end
+  end,
+  -- LibDBIcon stores the button position as minimapPos.
+  [2] = function(db)
+    local mm = type(db.global) == "table" and db.global.minimap
+    if type(mm) == "table" and mm.angle ~= nil then
+      if mm.minimapPos == nil then mm.minimapPos = mm.angle end
+      mm.angle = nil
+    end
   end,
 }
 
@@ -155,6 +166,22 @@ function UP:ResetDB(all)
   UP:Fire("STATE_CHANGED")
 end
 
+-- The build last loaded for this character. Defaults to a copy of the Raid DPS preset for the
+-- summoned pet's family, or Cat when no pet is out.
+function UP:CurrentBuild()
+  local char = UP.char
+  if char and type(char.currentBuild) == "table" then return char.currentBuild end
+  local family = UnitCreatureFamily and UnitCreatureFamily("pet")
+  if not (family and UP.Presets[family]) then family = "Cat" end
+  return UP.Planner.CopyBuild(UP.Planner.Preset(family))
+end
+
+-- Stores build as this character's current build and tells the UI.
+function UP:SetCurrentBuild(build)
+  UP.char.currentBuild = build
+  UP:Fire("STATE_CHANGED")
+end
+
 UP:On("ADDON_LOADED", function(name)
   if name ~= addonName then return end
   UP:InitDB()
@@ -182,6 +209,8 @@ UP.DEBUG_APIS = {
   -- Maps, UI, waypoints
   "C_Map.GetMapInfo", "C_Map.SetUserWaypoint", "UiMapPoint.CreateFromCoordinates",
   "C_Timer.After", "UIDropDownMenu_Initialize",
+  -- Character sheet: Classic Pet tab, or Forever's pet view inside the paper doll
+  "PetPaperDollFrame", "CharacterFrame", "CharacterStatsPanePetScrollBox", "CharacterFrame.TitleContainer",
   "TomTom.AddWaypoint",
 }
 
@@ -212,8 +241,12 @@ local function notImplemented(cmd)
 end
 
 local HELP = {
-  "show - open the planner",
-  "scan - rescan the active pet",
+  "show - open the planner (also /upet on its own)",
+  "scan - read the active pet again",
+  "pet - show the current pet panel",
+  "alerts [popup|sound|chat on|off | test] - learned-ability alert settings",
+  "options - open the options page",
+  "minimap - show or hide the minimap button",
   "debug - list the game APIs this client provides",
   "export - print the current build string",
   "import <string> - load a build string",
@@ -228,20 +261,59 @@ UP.commands = {
       UP:Print("  " .. line)
     end
   end,
-  show = function() notImplemented("show") end,
-  scan = function() notImplemented("scan") end,
-  export = function() notImplemented("export") end,
+  show = function()
+    if UP.UI and UP.UI.Toggle then UP.UI:Toggle() else notImplemented("show") end
+  end,
+  scan = function()
+    if not (UP.Scanner and UP.Scanner.ReadPet) then return notImplemented("scan") end
+    local pet = UP.Scanner:ReadPet()
+    if not (pet and pet.exists) then
+      UP:Print("No pet summoned.")
+    else
+      UP:Print(("%s: %s, level %s, %s TP total, %s used."):format(tostring(pet.name), tostring(pet.family),
+        tostring(pet.level), tostring(pet.tpTotal), tostring(pet.tpUsed)))
+    end
+  end,
+  pet = function()
+    if UP.PetPanel and UP.PetPanel.Toggle then UP.PetPanel:Toggle() else notImplemented("pet") end
+  end,
+  alerts = function(rest)
+    if UP.Alerts and UP.Alerts.Slash then UP.Alerts.Slash(rest) else notImplemented("alerts") end
+  end,
+  options = function()
+    if UP.Options and UP.Options.Open then UP.Options:Open() else notImplemented("options") end
+  end,
+  minimap = function()
+    if UP.Minimap and UP.Minimap.Toggle then UP.Minimap:Toggle() else notImplemented("minimap") end
+  end,
+  export = function()
+    UP:Print(UP.Serializer.Encode(UP:CurrentBuild()))
+  end,
   import = function(rest)
     if rest == "" then
       UP:Print("usage: /upet import <string>")
       return
     end
-    notImplemented("import")
+    -- The planner's import applies the same checks as its Import button.
+    if UP.UI and UP.UI.Import then
+      UP.UI:Import(rest)
+      return
+    end
+    local ok, result = UP.Serializer.Decode(rest)
+    if not ok then
+      UP:Print("Import failed: " .. result)
+      return
+    end
+    UP:SetCurrentBuild(result)
+    local n = 0
+    for _ in pairs(result.skills) do n = n + 1 end
+    UP:Print(("Imported %s build (%d skill%s)."):format(result.family, n, n == 1 and "" or "s"))
   end,
   reset = function(rest)
     local all = rest:match("^all") ~= nil
     if rest:match("confirm$") then
       UP:ResetDB(all)
+      if all and UP.Minimap and UP.Minimap.Rebind then UP.Minimap:Rebind() end
       UP:Print(all and "all saved data reset." or "data for " .. UP:CharKey() .. " reset.")
     else
       UP:Print("this wipes " .. (all and "ALL saved data" or "data for " .. UP:CharKey())
@@ -267,13 +339,33 @@ UP.commands = {
     else
       UP:Print("no pet summoned; summon one and run /upet debug again for pet values.")
     end
+    UP:Print("  Beast Training spell 5149: " .. tostring(probe("C_Spell.GetSpellName", 5149)))
+    if UP.Scanner and UP.Scanner.DebugDump then
+      local ok, lines = pcall(UP.Scanner.DebugDump, UP.Scanner)
+      if ok and type(lines) == "table" then
+        for _, line in ipairs(lines) do UP:Print("  " .. tostring(line)) end
+      end
+    end
+    -- Raw trainer costs for a few ranks, to find which GetTrainerServiceCost return is TP.
+    local shown = 0
+    for skill, ranks in pairs(UP.char and UP.char.craftCosts or {}) do
+      for rank, entry in pairs(ranks) do
+        if shown < 5 and type(entry) == "table" then
+          local costs = {}
+          for i = 1, (entry.costs and entry.costs.n or 0) do costs[#costs + 1] = tostring(entry.costs[i]) end
+          UP:Print(("  cost %s %d: level %s, returns {%s}"):format(skill, rank, tostring(entry.level),
+            table.concat(costs, ", ")))
+          shown = shown + 1
+        end
+      end
+    end
   end,
 }
 
 function UP:HandleSlash(input)
   local cmd, rest = (input or ""):match("^%s*(%S*)%s*(.-)%s*$")
   cmd = cmd:lower()
-  if cmd == "" then cmd = "help" end
+  if cmd == "" then cmd = "show" end
   local fn = UP.commands[cmd]
   if fn then
     fn(rest)

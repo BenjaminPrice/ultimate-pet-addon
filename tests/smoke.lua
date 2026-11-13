@@ -4,9 +4,15 @@
 local wow = dofile("tests/wowstub.lua")
 
 local UP = wow.load()
+dofile("tests/uistub.lua").install() -- frame API for /upet show
 wow.fire("ADDON_LOADED", "UltimatePet")
 assert(type(UltimatePetDB) == "table", "UltimatePetDB not created")
-for _, line in ipairs({ "/upet help", "/upet debug", "/ultimatepet show", "/upet reset", "/upet reset confirm" }) do
+local commands = {
+  "/upet help", "/upet debug", "/ultimatepet show", "/upet", "/upet scan", "/upet pet", "/upet minimap",
+  "/upet alerts", "/upet alerts sound off", "/upet alerts test", "/upet options",
+  "/upet reset", "/upet reset confirm",
+}
+for _, line in ipairs(commands) do
   print("> " .. line)
   assert(wow.slash(line), "no handler for " .. line)
   for _, msg in ipairs(wow.takeChat()) do print("  " .. msg) end
