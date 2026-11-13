@@ -3,8 +3,7 @@
 -- LibDBIcon10_UltimatePet, which minimap button collectors (EllesmereUIMinimap and others) group
 -- with other addons; broker displays (Titan Panel, ElvUI datatexts, ...) can show the launcher.
 local _, UP = ...
--- luacheck: read globals UIParent ToggleDropDownMenu
--- luacheck: read globals UIDropDownMenu_Initialize UIDropDownMenu_CreateInfo UIDropDownMenu_AddButton
+-- luacheck: read globals UIParent UISpecialFrames
 
 UP.Minimap = UP.Minimap or {}
 local Minimap = UP.Minimap
@@ -41,7 +40,7 @@ local function openPetView()
   end
 end
 
--- Menu callbacks run inside the game's menu code, which can hide errors; print them instead.
+-- Runs a menu entry, printing any error, and records the pick for /upet debug.
 local function safe(text, func)
   return function()
     Minimap.picks = Minimap.picks or {}
@@ -57,47 +56,97 @@ Minimap.MENU = {
   { text = "Pet view", func = safe("Pet view", openPetView) },
 }
 
--- Older clients without MenuUtil: a UIDropDownMenu at the cursor.
-local function legacyMenu()
-  local frame = Minimap.dropdown
-  if not frame then
-    frame = CreateFrame("Frame", "UltimatePetMinimapMenu", UIParent, "UIDropDownMenuTemplate")
-    Minimap.dropdown = frame
-  end
-  UIDropDownMenu_Initialize(frame, function(_, level)
-    if level ~= 1 then return end
-    local title = UIDropDownMenu_CreateInfo()
-    title.text, title.isTitle, title.notCheckable = NAME, true, true
-    UIDropDownMenu_AddButton(title, level)
-    for _, item in ipairs(Minimap.MENU) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text, info.func, info.notCheckable = item.text, item.func, true
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end, "MENU")
-  ToggleDropDownMenu(1, nil, frame, "cursor", 0, 0)
-end
+local MENU_WIDTH, MENU_ROW, MENU_PAD = 150, 18, 6
+local MENU_LINGER = 1.5 -- seconds the menu stays after the mouse leaves it
 
--- Shows the right-click menu next to the button.
-function Minimap:OpenMenu(owner)
-  local menuUtil = rawget(_G, "MenuUtil")
-  if menuUtil and menuUtil.CreateContextMenu then
-    self.menuKind = "MenuUtil"
-    return menuUtil.CreateContextMenu(owner, function(_, root)
-      root:CreateTitle(NAME)
-      for _, item in ipairs(Minimap.MENU) do root:CreateButton(item.text, item.func) end
+-- Our own menu frame. Blizzard's context menu sits below minimap collectors such as EllesmereUI's,
+-- so its clicks fell through to the button underneath; this one is drawn on the top strata.
+local function buildMenu()
+  local f = CreateFrame("Frame", "UltimatePetMinimapMenu", UIParent, "BackdropTemplate")
+  f:SetFrameStrata("FULLSCREEN_DIALOG")
+  f:SetToplevel(true)
+  f:SetClampedToScreen(true)
+  f:EnableMouse(true)
+  f:SetSize(MENU_WIDTH, MENU_PAD * 2 + (#Minimap.MENU + 1) * MENU_ROW)
+  f:Hide()
+  if f.SetBackdrop then
+    f:SetBackdrop({
+      bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+      edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true, tileSize = 16, edgeSize = 16,
+      insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    f:SetBackdropColor(0.02, 0.02, 0.07, 0.96)
+  end
+  local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  title:SetPoint("TOPLEFT", MENU_PAD + 4, -MENU_PAD - 3)
+  title:SetText(NAME)
+  f.buttons = {}
+  for i, item in ipairs(Minimap.MENU) do
+    local b = CreateFrame("Button", nil, f)
+    b:SetHeight(MENU_ROW)
+    b:SetPoint("TOPLEFT", MENU_PAD, -MENU_PAD - i * MENU_ROW)
+    b:SetPoint("RIGHT", f, "RIGHT", -MENU_PAD, 0)
+    local hl = b:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetColorTexture(0.27, 0.43, 0.78, 0.45)
+    local fs = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    fs:SetPoint("LEFT", 4, 0)
+    fs:SetText(item.text)
+    b:SetFontString(fs)
+    b.label = fs
+    b:RegisterForClicks("AnyUp")
+    b:SetScript("OnClick", function()
+      f:Hide()
+      item.func()
+    end)
+    f.buttons[i] = b
+  end
+  -- Close after the mouse has been away for a moment, or on a click anywhere else.
+  f:SetScript("OnUpdate", function(self, elapsed)
+    if self:IsMouseOver() then
+      self.away = 0
+    else
+      self.away = (self.away or 0) + (elapsed or 0)
+      if self.away > MENU_LINGER then self:Hide() end
+    end
+  end)
+  if pcall(f.RegisterEvent, f, "GLOBAL_MOUSE_DOWN") then
+    f:SetScript("OnEvent", function(self)
+      if self:IsShown() and not self:IsMouseOver() then self:Hide() end
     end)
   end
-  if rawget(_G, "UIDropDownMenu_Initialize") and rawget(_G, "ToggleDropDownMenu") then
-    self.menuKind = "UIDropDownMenu"
-    return legacyMenu()
-  end
-  self.menuKind = "none"
+  if type(rawget(_G, "UISpecialFrames")) == "table" then table.insert(UISpecialFrames, "UltimatePetMinimapMenu") end
+  return f
 end
 
--- Lines for /upet debug: which menu the client used and which entries were picked.
+-- Shows the right-click menu at the cursor (or beside the button). A second right-click closes it.
+function Minimap:OpenMenu(owner)
+  local f = self.menu or buildMenu()
+  self.menu = f
+  if f:IsShown() then
+    f:Hide()
+    return
+  end
+  f:ClearAllPoints()
+  local getCursor = rawget(_G, "GetCursorPosition")
+  local scale = UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
+  if getCursor then
+    local x, y = getCursor()
+    f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale - 8, y / scale + 8)
+  elseif type(owner) == "table" and owner.GetObjectType then
+    f:SetPoint("TOPRIGHT", owner, "BOTTOMLEFT", 0, 0)
+  else
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  end
+  f.away = 0
+  f:Show()
+  if f.Raise then f:Raise() end
+end
+
+-- Lines for /upet debug: which entries of the menu were picked.
 function Minimap:DebugDump()
-  return { ("minimap menu: %s, picked: %s"):format(tostring(self.menuKind),
+  return { ("minimap menu: %s, picked: %s"):format(self.menu and "own" or "not opened",
     self.picks and table.concat(self.picks, ", ") or "nothing") }
 end
 

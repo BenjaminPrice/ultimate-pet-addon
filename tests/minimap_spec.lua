@@ -67,47 +67,43 @@ describe("Minimap button", function()
     assert.are.equal(1, toggled)
   end)
 
-  it("shows a menu with the planner and the pet view on right-click", function()
-    wow.fire("PLAYER_LOGIN")
-    local built = {}
-    local root = {
-      CreateTitle = function(_, text) built[#built + 1] = { title = text } end,
-      CreateButton = function(_, text, func) built[#built + 1] = { text = text, func = func } end,
-    }
-    local owner = {}
-    _G.MenuUtil = { CreateContextMenu = function(o, gen) assert.are.equal(owner, o); gen(o, root) end }
-    local planner, petView = 0, 0
-    UP.UI = { Toggle = function() planner = planner + 1 end }
-    UP.PetPanel = { Toggle = function() petView = petView + 1 end }
-    rec.objects.UltimatePet.OnClick(owner, "RightButton")
-    _G.MenuUtil = nil
-    assert.are.same({ title = "UltimatePet" }, built[1])
-    assert.are.equal("Skill planner", built[2].text)
-    assert.are.equal("Pet view", built[3].text)
-    assert.are.equal(0, planner)
-    built[2].func()
-    built[3].func()
-    assert.are.equal(1, planner)
-    assert.are.equal(1, petView)
-  end)
+  describe("right-click menu", function()
+    local stub = dofile("tests/uistub.lua")
+    before_each(function() stub.install() end)
+    after_each(function() stub.uninstall() end)
 
-  it("falls back to a dropdown menu without MenuUtil", function()
-    local added, toggled = {}, nil
-    local createFrame = _G.CreateFrame
-    _G.UIParent = {}
-    _G.CreateFrame = function() return {} end
-    _G.UIDropDownMenu_CreateInfo = function() return {} end
-    _G.UIDropDownMenu_AddButton = function(info) added[#added + 1] = info end
-    _G.UIDropDownMenu_Initialize = function(frame, init) init(frame, 1) end
-    _G.ToggleDropDownMenu = function(_, _, frame, anchor) toggled = { frame = frame, anchor = anchor } end
-    UP.Minimap.OnClick({}, "RightButton")
-    for _, k in ipairs({ "UIParent", "UIDropDownMenu_CreateInfo", "UIDropDownMenu_AddButton",
-      "UIDropDownMenu_Initialize", "ToggleDropDownMenu" }) do _G[k] = nil end
-    _G.CreateFrame = createFrame
-    assert.is_true(added[1].isTitle)
-    assert.are.equal("Skill planner", added[2].text)
-    assert.are.equal("Pet view", added[3].text)
-    assert.are.equal("cursor", toggled.anchor)
+    it("opens our own top-strata menu with the planner and the pet view", function()
+      local planner, petView = 0, 0
+      UP.UI = { Toggle = function() planner = planner + 1 end }
+      UP.PetPanel = { Toggle = function() petView = petView + 1 end }
+      UP.Minimap.OnClick({}, "RightButton")
+      local menu = UP.Minimap.menu
+      assert.is_true(menu:IsShown())
+      assert.are.equal(menu, _G.UltimatePetMinimapMenu)
+      assert.are.equal("Skill planner", menu.buttons[1].label:GetText())
+      assert.are.equal("Pet view", menu.buttons[2].label:GetText())
+      assert.are.equal(0, planner)
+      menu.buttons[2]:Click()
+      assert.are.equal(1, petView)
+      assert.is_false(menu:IsShown())
+      UP.Minimap.OnClick({}, "RightButton")
+      menu.buttons[1]:Click()
+      assert.are.equal(1, planner)
+      assert.matches("picked: Pet view, Skill planner", UP.Minimap:DebugDump()[1], nil, true)
+    end)
+
+    it("closes on a second right-click", function()
+      UP.Minimap.OnClick({}, "RightButton")
+      UP.Minimap.OnClick({}, "RightButton")
+      assert.is_false(UP.Minimap.menu:IsShown())
+    end)
+
+    it("prints menu errors instead of losing them", function()
+      UP.PetPanel = { Toggle = function() error("boom") end }
+      UP.Minimap.OnClick({}, "RightButton")
+      UP.Minimap.menu.buttons[2]:Click()
+      assert.matches("Menu error: .*boom", table.concat(wow.takeChat(), "\n"))
+    end)
   end)
 
   it("shows a plain tooltip with the sync hint", function()
