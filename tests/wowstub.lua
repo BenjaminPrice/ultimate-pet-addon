@@ -8,7 +8,8 @@
 --
 -- wow.load() resets the stubbed globals first, so each call is an independent client session.
 -- Pass { saved = tbl } to start with existing SavedVariables, { player = "Name", realm = "Realm" }
--- for another character, and { root = "path" } when not running from the repository root.
+-- for another character, { petFamily = "Wolf" } for a summoned pet, and { root = "path" } when not
+-- running from the repository root.
 
 local wow = {}
 
@@ -16,7 +17,7 @@ local ADDON = "UltimatePet"
 
 -- Every global the stub installs, so reset() can clear the previous session's.
 local INSTALLED = {
-  "CreateFrame", "UnitName", "GetRealmName", "GetTime", "GetBuildInfo", "GetAddOnMetadata",
+  "CreateFrame", "UnitName", "UnitCreatureFamily", "GetRealmName", "GetTime", "GetBuildInfo", "GetAddOnMetadata",
   "C_AddOns", "C_Timer", "DEFAULT_CHAT_FRAME", "SlashCmdList", "UltimatePetDB",
   "SLASH_ULTIMATEPET1", "SLASH_ULTIMATEPET2",
 }
@@ -72,6 +73,10 @@ function wow.reset(opts)
 
   function UnitName(unit)
     if unit == "player" then return opts.player or "Tester" end
+    return nil
+  end
+  function UnitCreatureFamily(unit)
+    if unit == "pet" then return opts.petFamily end
     return nil
   end
   function GetRealmName() return opts.realm or "Forever" end

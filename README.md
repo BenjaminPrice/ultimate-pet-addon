@@ -8,8 +8,9 @@ tracking of the ranks your Hunter has unlocked in Beast Training, and waypoints 
 built-in map pin) to the tameable beasts that teach ranks you are missing.
 
 > **Status: early development.** Phase 1 (scaffold, saved data, slash commands, tooling) and
-> phase 2 (ability and beast data) are done. The scanner, planner and UI are not built yet, so most
-> commands say "not implemented yet".
+> phase 2 (ability and beast data) are done. Phase 3 adds the planner logic, build strings
+> (`/upet export`, `/upet import <string>`) and suggested presets for every family. The scanner and
+> UI are not built yet, so `show` and `scan` say "not implemented yet".
 
 ## Install
 

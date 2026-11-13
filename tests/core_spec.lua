@@ -166,7 +166,7 @@ describe("Core", function()
     end)
 
     it("reports unimplemented commands", function()
-      for _, cmd in ipairs({ "show", "scan", "export", "import abc" }) do
+      for _, cmd in ipairs({ "show", "scan" }) do
         wow.slash("/upet " .. cmd)
         assert.matches("not implemented yet", joined(wow.takeChat()), nil, true)
       end
@@ -190,6 +190,58 @@ describe("Core", function()
       DEFAULT_CHAT_FRAME.AddMessage = function(_, msg) raw = msg end
       UP:Print("hi", 1)
       assert.are.equal("|cffabd473UltimatePet|r: hi 1", raw)
+    end)
+  end)
+
+  describe("export and import", function()
+    before_each(function()
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+    end)
+
+    it("exports the Cat Raid DPS preset when nothing is loaded and no pet is out", function()
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:Cat:60-6:Bi8,Cl8,Da3,Gr7,GS9,NA7" }, wow.takeChat())
+      assert.is_nil(UP.char.currentBuild)
+    end)
+
+    it("defaults to the summoned pet's family", function()
+      UP = wow.load({ petFamily = "Wolf" })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+      wow.slash("/upet export")
+      assert.matches("^UltimatePet: UP1:Wolf:60%-6:", wow.takeChat()[1])
+    end)
+
+    it("imports a build, stores it per character and exports it back", function()
+      local fired = 0
+      UP:On("STATE_CHANGED", function() fired = fired + 1 end)
+      wow.slash("/upet import up1:Cat:60-6: Bi8,Cl8,Da3,Gr7,GS9,NA7")
+      assert.are.same({ "UltimatePet: Imported Cat build (6 skills)." }, wow.takeChat())
+      assert.are.equal(1, fired)
+      assert.are.equal("Cat", UltimatePetDB.chars["Tester-Forever"].currentBuild.family)
+      wow.slash("/upet import UP1:BirdofPrey:20-3:Cl3")
+      assert.are.same({ "UltimatePet: Imported Bird of Prey build (1 skill)." }, wow.takeChat())
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:BirdofPrey:20-3:Cl3" }, wow.takeChat())
+    end)
+
+    it("keeps the current build when an import fails", function()
+      wow.slash("/upet import UP1:Cat:60-6:Sw1")
+      assert.are.same({ "UltimatePet: Import failed: Cat can't learn Swipe." }, wow.takeChat())
+      assert.is_nil(UP.char.currentBuild)
+      wow.slash("/upet import")
+      assert.matches("usage", wow.takeChat()[1])
+    end)
+
+    it("survives a reload", function()
+      wow.slash("/upet import UP1:Wolf:60-6:Bi8")
+      local saved = UltimatePetDB
+      UP = wow.load({ saved = saved })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      wow.takeChat()
+      wow.slash("/upet export")
+      assert.are.same({ "UltimatePet: UP1:Wolf:60-6:Bi8" }, wow.takeChat())
     end)
   end)
 

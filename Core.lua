@@ -92,6 +92,7 @@ local CHAR_DEFAULTS = {
   builds = {},     -- [name] = build table
   petBuild = {},   -- [petName .. "|" .. family] = build name
   -- scannedAt: time of the last Beast Training scan; nil until the first one
+  -- currentBuild: the build last loaded (import or planner); nil = CurrentBuild()'s default
 }
 
 -- Fills missing keys of t from defaults, recursing into tables; never overwrites a value.
@@ -152,6 +153,22 @@ function UP:ResetDB(all)
     UltimatePetDB.chars[UP:CharKey()] = nil
   end
   UP:InitDB()
+  UP:Fire("STATE_CHANGED")
+end
+
+-- The build last loaded for this character. Defaults to a copy of the Raid DPS preset for the
+-- summoned pet's family, or Cat when no pet is out.
+function UP:CurrentBuild()
+  local char = UP.char
+  if char and type(char.currentBuild) == "table" then return char.currentBuild end
+  local family = UnitCreatureFamily and UnitCreatureFamily("pet")
+  if not (family and UP.Presets[family]) then family = "Cat" end
+  return UP.Planner.CopyBuild(UP.Planner.Preset(family))
+end
+
+-- Stores build as this character's current build and tells the UI.
+function UP:SetCurrentBuild(build)
+  UP.char.currentBuild = build
   UP:Fire("STATE_CHANGED")
 end
 
@@ -230,13 +247,23 @@ UP.commands = {
   end,
   show = function() notImplemented("show") end,
   scan = function() notImplemented("scan") end,
-  export = function() notImplemented("export") end,
+  export = function()
+    UP:Print(UP.Serializer.Encode(UP:CurrentBuild()))
+  end,
   import = function(rest)
     if rest == "" then
       UP:Print("usage: /upet import <string>")
       return
     end
-    notImplemented("import")
+    local ok, result = UP.Serializer.Decode(rest)
+    if not ok then
+      UP:Print("Import failed: " .. result)
+      return
+    end
+    UP:SetCurrentBuild(result)
+    local n = 0
+    for _ in pairs(result.skills) do n = n + 1 end
+    UP:Print(("Imported %s build (%d skill%s)."):format(result.family, n, n == 1 and "" or "s"))
   end,
   reset = function(rest)
     local all = rest:match("^all") ~= nil
