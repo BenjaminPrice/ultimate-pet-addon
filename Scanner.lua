@@ -14,6 +14,8 @@ local Scanner = UP.Scanner or {}
 UP.Scanner = Scanner
 
 local COALESCE_DELAY = 0.2
+-- TP and the pet spellbook update on separate events, so a worked-out cost must hold over two reads.
+local CONFIRM_DELAY = 2
 local MAX_UNMATCHED = 5
 
 local LOYALTY_LEVELS = {
@@ -291,6 +293,73 @@ local function buildPet()
   return pet, spellCount, unmatched
 end
 
+local function rankData(skill, rank)
+  local s = UP.Skills and UP.Skills[skill]
+  return s and s.ranks and s.ranks[rank]
+end
+
+-- Fills ranks with no TP cost in the data from costs saved by earlier pets.
+function Scanner:ApplyLearnedCosts()
+  local saved = UP.db and UP.db.global and UP.db.global.tpCosts
+  for skill, ranks in pairs(type(saved) == "table" and saved or {}) do
+    for rank, tp in pairs(ranks) do
+      local r = rankData(skill, rank)
+      if r and r.tp == nil then r.tp = tp end
+    end
+  end
+end
+
+-- Used TP is the sum of the costs of the highest rank of each skill the pet knows, so when exactly
+-- one of those costs is missing it is the used TP minus the rest.
+function Scanner.MissingCost(pet)
+  if not (pet and pet.exists and pet.tpUsed) then return nil end
+  local missingSkill, missingRank, sum
+  sum = 0
+  for skill, rank in pairs(pet.known or {}) do
+    local r = rankData(skill, rank)
+    if not r then return nil end
+    if r.tp == nil then
+      if missingSkill then return nil end
+      missingSkill, missingRank = skill, rank
+    else
+      sum = sum + r.tp
+    end
+  end
+  if not missingSkill then return nil end
+  local cost = pet.tpUsed - sum
+  local lower, higher = rankData(missingSkill, missingRank - 1), rankData(missingSkill, missingRank + 1)
+  if cost < 0 or (lower and lower.tp and cost < lower.tp) or (higher and higher.tp and cost > higher.tp) then
+    return nil
+  end
+  return missingSkill, missingRank, cost
+end
+
+function Scanner:LearnMissingCost(pet)
+  local skill, rank, cost = Scanner.MissingCost(pet)
+  if not skill then
+    self.costCandidate = nil
+    return
+  end
+  local key = ("%s|%d|%d|%d"):format(skill, rank, cost, pet.tpUsed)
+  local candidate, t = self.costCandidate, tonumber((call("GetTime"))) or 0
+  if not (candidate and candidate.key == key) then
+    self.costCandidate = { key = key, at = t }
+    local after = lookup("C_Timer.After")
+    if type(after) == "function" then pcall(after, CONFIRM_DELAY + 0.1, function() self:ReadPet() end) end
+    return
+  end
+  if t - candidate.at < CONFIRM_DELAY then return end
+  self.costCandidate = nil
+  local saved = UP.db and UP.db.global
+  if not saved then return end
+  saved.tpCosts = type(saved.tpCosts) == "table" and saved.tpCosts or {}
+  saved.tpCosts[skill] = saved.tpCosts[skill] or {}
+  saved.tpCosts[skill][rank] = cost
+  rankData(skill, rank).tp = cost
+  UP:Print(("%s (Rank %d) costs %d TP, worked out from your pet's training points."):format(skill, rank, cost))
+  UP:Fire("STATE_CHANGED")
+end
+
 function Scanner:ReadPet()
   local ok, pet, spellCount, unmatched = pcall(buildPet)
   if not ok or type(pet) ~= "table" then
@@ -301,6 +370,7 @@ function Scanner:ReadPet()
   local changed = not samePet(self.pet, pet)
   self.pet = pet
   if changed then UP:Fire("STATE_CHANGED") end
+  self:LearnMissingCost(pet)
   return pet
 end
 
@@ -382,6 +452,9 @@ local function scanTrainer()
   if not ok then Scanner.lastScan = { error = tostring(err), services = 0, matched = 0, learned = 0,
     unmatched = {}, unmatchedCount = 0 } end
 end
+on("ADDON_LOADED", function(name)
+  if name == UP.name then Scanner:ApplyLearnedCosts() end
+end)
 on("TRAINER_SHOW", scanTrainer)
 on("TRAINER_UPDATE", scanTrainer)
 

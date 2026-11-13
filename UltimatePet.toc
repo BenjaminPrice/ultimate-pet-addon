@@ -2,10 +2,10 @@
 ## Title: UltimatePet
 ## Notes: Hunter pet build planner and progression tracker for WoW: Forever.
 ## Author: Benjamin Price
-## Version: 0.1.0
+## Version: 1.0.0
 ## SavedVariables: UltimatePetDB
 ## OptionalDeps: TomTom
-## IconTexture: Interface\Icons\Ability_Hunter_BeastTraining
+## IconTexture: Interface\AddOns\UltimatePet\Media\Icon
 ## X-License: MIT
 
 # Embedded libraries: LibStub, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0

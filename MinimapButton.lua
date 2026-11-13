@@ -8,7 +8,7 @@ UP.Minimap = UP.Minimap or {}
 local Minimap = UP.Minimap
 
 local NAME = "UltimatePet"
-local ICON = "Interface\\Icons\\Ability_Hunter_BeastTraining"
+local ICON = "Interface\\AddOns\\UltimatePet\\Media\\Icon"
 
 local function lib(name)
   local stub = rawget(_G, "LibStub")
