@@ -40,20 +40,10 @@ local function openPetView()
   end
 end
 
--- Runs a menu entry, printing any error, and records the pick for /upet debug.
-local function safe(text, func)
-  return function()
-    Minimap.picks = Minimap.picks or {}
-    table.insert(Minimap.picks, text)
-    local ok, err = pcall(func)
-    if not ok then UP:Print("Menu error: " .. tostring(err)) end
-  end
-end
-
 -- Entries of the right-click menu, in order.
 Minimap.MENU = {
-  { text = "Skill planner", func = safe("Skill planner", openPlanner) },
-  { text = "Pet view", func = safe("Pet view", openPetView) },
+  { text = "Skill planner", func = openPlanner },
+  { text = "Pet view", func = openPetView },
 }
 
 local MENU_WIDTH, MENU_ROW, MENU_PAD = 150, 18, 6
@@ -142,12 +132,6 @@ function Minimap:OpenMenu(owner)
   f.away = 0
   f:Show()
   if f.Raise then f:Raise() end
-end
-
--- Lines for /upet debug: which entries of the menu were picked.
-function Minimap:DebugDump()
-  return { ("minimap menu: %s, picked: %s"):format(self.menu and "own" or "not opened",
-    self.picks and table.concat(self.picks, ", ") or "nothing") }
 end
 
 -- Left-click opens or closes the planner; right-click shows the menu.

@@ -89,7 +89,6 @@ describe("Minimap button", function()
       UP.Minimap.OnClick({}, "RightButton")
       menu.buttons[1]:Click()
       assert.are.equal(1, planner)
-      assert.matches("picked: Pet view, Skill planner", UP.Minimap:DebugDump()[1], nil, true)
     end)
 
     it("closes on a second right-click", function()
@@ -98,12 +97,6 @@ describe("Minimap button", function()
       assert.is_false(UP.Minimap.menu:IsShown())
     end)
 
-    it("prints menu errors instead of losing them", function()
-      UP.PetPanel = { Toggle = function() error("boom") end }
-      UP.Minimap.OnClick({}, "RightButton")
-      UP.Minimap.menu.buttons[2]:Click()
-      assert.matches("Menu error: .*boom", table.concat(wow.takeChat(), "\n"))
-    end)
   end)
 
   it("shows a plain tooltip with the sync hint", function()

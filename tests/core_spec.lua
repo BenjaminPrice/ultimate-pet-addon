@@ -48,7 +48,7 @@ describe("Core", function()
       assert.is_table(UltimatePetDB.global.frame)
       local char = UltimatePetDB.chars["Tester-Forever"]
       assert.is_table(char)
-      for _, key in ipairs({ "unlocked", "craftCosts", "builds", "petBuild" }) do
+      for _, key in ipairs({ "unlocked", "builds", "petBuild" }) do
         assert.is_table(char[key], key)
       end
       assert.is_nil(char.scannedAt)
@@ -84,7 +84,6 @@ describe("Core", function()
       assert.is_false(UltimatePetDB.global.minimap.hide)
       assert.is_true(UP.char.unlocked.Bite[3])
       assert.are.equal(123, UP.char.scannedAt)
-      assert.is_table(UP.char.craftCosts)
       assert.is_table(UltimatePetDB.chars["Alt-Forever"].builds.x)
     end)
   end)
@@ -177,17 +176,18 @@ describe("Core", function()
       assert.matches("No pet summoned.", joined(wow.takeChat()), nil, true)
     end)
 
-    it("lists APIs in debug, guarded against missing tables", function()
-      _G.C_Timer = nil
-      _G.GetPetLoyalty = function() end
+    it("prints the version, client and scanner state in debug", function()
       wow.slash("/upet debug")
       local out = joined(wow.takeChat())
-      assert.matches("GetCraftInfo: missing", out, nil, true)
-      assert.matches("C_Timer.After: missing", out, nil, true)
-      assert.matches("GetPetLoyalty: function", out, nil, true)
-      _G.GetPetLoyalty = nil
-      assert.matches("TomTom.AddWaypoint: missing", out, nil, true)
       assert.matches("client 1.60.0", out, nil, true)
+      assert.matches("pet: none", out, nil, true)
+    end)
+
+    it("drops the unused craftCosts table when migrating to version 3", function()
+      UP = wow.load({ saved = { version = 2, chars = { ["Tester-Forever"] = { craftCosts = { Bite = {} } } } } })
+      wow.fire("ADDON_LOADED", "UltimatePet")
+      assert.is_nil(UP.char.craftCosts)
+      assert.are.equal(3, UltimatePetDB.version)
     end)
 
     it("prefixes output", function()

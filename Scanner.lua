@@ -25,7 +25,6 @@
 --     unlocked  = { [skill] = { [rank] = true } } }   -- name-keyed, the per-character DB table itself
 --
 -- Saved per character (UP.char): unlocked[skill][rank] = true (only grows),
--- craftCosts[skill][rank] = { level = levelReq, costs = { n = count, ...GetTrainerServiceCost returns } },
 -- scannedAt = time() of the last Beast Training scan.
 --
 -- Approach learned from TrueshotLodge src/training.lua and Huntsworn Core/Pet.lua (MIT); re-implemented.
@@ -61,23 +60,7 @@ Scanner.lastPetRead = nil
 -- Helpers
 -- ---------------------------------------------------------------------------
 
-local lookup = UP.lookup or function(path)
-  local value = _G
-  for part in path:gmatch("[^%.]+") do
-    if type(value) ~= "table" then return nil end
-    value = value[part]
-  end
-  return value
-end
-
--- Calls a dotted global path under pcall; returns nothing if it is missing or errors.
-local function call(path, ...)
-  local fn = lookup(path)
-  if type(fn) ~= "function" then return end
-  local res = { pcall(fn, ...) }
-  if not res[1] then return end
-  return unpack(res, 2, table.maxn(res))
-end
+local lookup, call = UP.lookup, UP.call
 
 -- The first of several dotted paths that exists, called.
 local function callFirst(paths, ...)
@@ -88,10 +71,6 @@ end
 
 local function trainerCall(name, ...)
   return callFirst({ name, "C_Trainer." .. name }, ...)
-end
-
-local function pack(...)
-  return { n = select("#", ...), ... }
 end
 
 local function digit(text)
@@ -196,7 +175,7 @@ function Scanner:ScanTrainer()
   local scan = { at = now(), services = n, beast = beast, matched = 0, learned = 0, unmatched = {}, unmatchedCount = 0 }
   self.lastScan = scan
 
-  local learned, costs = {}, {}
+  local learned = {}
   for i = 1, n do
     local name, rankText, status = serviceInfo(i)
     if name and status ~= "header" then
@@ -210,11 +189,6 @@ function Scanner:ScanTrainer()
         if beast or status == "used" then
           learned[#learned + 1] = { skill, rank }
         end
-        costs[#costs + 1] = {
-          skill, rank,
-          { level = tonumber((trainerCall("GetTrainerServiceLevelReq", i))),
-            costs = pack(trainerCall("GetTrainerServiceCost", i)) },
-        }
       else
         scan.unmatchedCount = scan.unmatchedCount + 1
         if #scan.unmatched < MAX_UNMATCHED then
@@ -229,16 +203,10 @@ function Scanner:ScanTrainer()
   if scan.matched == 0 or not db then return 0 end
 
   db.unlocked = type(db.unlocked) == "table" and db.unlocked or {}
-  db.craftCosts = type(db.craftCosts) == "table" and db.craftCosts or {}
   for _, e in ipairs(learned) do
     local ranks = db.unlocked[e[1]] or {}
     db.unlocked[e[1]] = ranks
     ranks[e[2]] = true
-  end
-  for _, e in ipairs(costs) do
-    local ranks = db.craftCosts[e[1]] or {}
-    db.craftCosts[e[1]] = ranks
-    ranks[e[2]] = e[3]
   end
   db.scannedAt = scan.at
   scan.known = countUnlocked(db.unlocked)
