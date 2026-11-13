@@ -2,7 +2,7 @@
 """Builds a shareable addon zip: .release/UltimatePet-<version>.zip
 
 The zip holds one UltimatePet/ folder with only what the game loads (the TOC, the files it lists,
-the embedded libraries) plus LICENSE and README.md. Tests, tools and CI files are left out.
+the embedded libraries, Media/) plus LICENSE and README.md. Tests, tools and CI files are left out.
 Files come from the working tree, but only ones tracked by git.
 
 Usage (from the repository root): python3 -I tools/package.py
@@ -45,8 +45,8 @@ def main():
         if path not in tracked:
             sys.exit(f"TOC lists {path}, which isn't tracked by git.")
         wanted.add(path)
-    # Libraries are loaded through embeds.xml, so take the whole folder.
-    wanted |= {p for p in tracked if p.startswith("Libs/")}
+    # Libraries load through embeds.xml and textures by path, so neither is listed in the TOC.
+    wanted |= {p for p in tracked if p.startswith(("Libs/", "Media/"))}
 
     dirty = git("status", "--porcelain", "--", *sorted(wanted)).strip()
     if dirty:

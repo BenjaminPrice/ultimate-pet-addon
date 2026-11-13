@@ -45,7 +45,7 @@ describe("Minimap button", function()
     local obj = rec.objects.UltimatePet
     assert.is_table(obj)
     assert.are.equal("launcher", obj.type)
-    assert.matches("Ability_Hunter_BeastTraining", obj.icon, nil, true)
+    assert.are.equal("Interface\\AddOns\\UltimatePet\\Media\\Icon", obj.icon)
     assert.are.equal(UltimatePetDB.global.minimap, rec.registered.UltimatePet.db)
     assert.is_true(UP.Minimap.registered)
   end)
